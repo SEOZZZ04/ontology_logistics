@@ -11,17 +11,14 @@ from .database import db
 from .simulator import simulator
 from .agent import query_agent
 
-# 로깅 설정 (터미널에서 확인용)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. DB 초기화 (필수)
     db.clean_database()
     db.init_schema()
     db.seed_data()
-    # 2. 시뮬레이터 시작
     sim_task = asyncio.create_task(simulator.start())
     yield
     simulator.stop()
@@ -39,53 +36,54 @@ class ChatRequest(BaseModel):
 async def read_root():
     return RedirectResponse(url="/ui/index.html")
 
-# [채팅 API] LLM 에러가 나도 죽지 않도록 예외 처리
+# [채팅 API]
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    logger.info(f"Chat Req: {req.message}")
     try:
         result = await query_agent(req.message)
         return result
     except Exception as e:
         logger.error(f"Chat Error: {e}")
+        # 에러 메시지를 더 구체적으로 반환하지 않고 사용자에게는 정중하게 표현
         return {
-            "reply": "죄송합니다. 현재 AI 모델 연결 상태가 불안정하여 답변할 수 없습니다. 잠시 후 다시 시도해주세요.",
+            "reply": f"죄송합니다. AI 모델 연결 중 오류가 발생했습니다. (Error: {str(e)})",
             "related_nodes": []
         }
 
-# [상태 API] 프론트엔드가 2초마다 호출
+# [시스템 상태 API]
 @app.get("/api/system-status")
 async def get_system_status():
-    # 1. 구역별 아이템 개수 집계
-    q_count = """
-    MATCH (z:Zone)
-    OPTIONAL MATCH (i:Item)-[:STORED_IN]->(z)
-    RETURN z.id as id, count(i) as count
-    """
+    # 1. 구역별 카운트
+    q_count = "MATCH (z:Zone) OPTIONAL MATCH (i:Item)-[:STORED_IN]->(z) RETURN z.id as id, count(i) as count"
     counts = {row['id']: row['count'] for row in db.run_query(q_count)}
     
-    # 2. 에러 이벤트 확인
-    q_error = """
-    MATCH (e:Event {type: 'ERROR'})
-    RETURN e.description as desc
-    """
-    errors = db.run_query(q_error)
+    # 2. 최근 이벤트
+    q_events = "MATCH (e:Event) RETURN e.type as type, e.description as desc ORDER BY e.timestamp DESC LIMIT 3"
+    events = db.run_query(q_events)
     
-    # 장애 시 빨간색 표시할 노드들
-    error_nodes = []
-    if errors:
-        error_nodes = ['Z_IN', 'Z_SORT'] # 장애 발생 시 앞단 라인 경고
-
-    # 3. 최근 5개 이벤트 (로그용)
-    q_events = """
-    MATCH (e:Event)
-    RETURN e.type as type, e.description as desc
-    ORDER BY e.timestamp DESC LIMIT 5
-    """
-    recent_events = db.run_query(q_events)
+    # 3. 현재 장애/프로모션 활성 여부 (Simulator 상태와 DB 이벤트로 판단)
+    error_active = any(e['type'] == 'ERROR' for e in events)
+    promo_active = any(e['type'] == 'PROMO' for e in events)
 
     return {
         "counts": counts,
-        "error_nodes": error_nodes,
-        "events": recent_events
+        "events": events,
+        "error_active": error_active,
+        "promo_active": promo_active
     }
+
+# [노드 상세 정보 API] (새로 추가됨)
+@app.get("/api/node-details/{node_id}")
+async def get_node_details(node_id: str):
+    # 해당 존에 있는 아이템 리스트 조회
+    q = """
+    MATCH (z:Zone {id: $id})
+    OPTIONAL MATCH (i:Item)-[:STORED_IN]->(z)
+    RETURN i.id as id, toString(i.timestamp) as time
+    ORDER BY i.timestamp DESC LIMIT 10
+    """
+    items = db.run_query(q, {"id": node_id})
+    # 아이템이 없는 경우(null) 필터링
+    valid_items = [i for i in items if i['id'] is not None]
+    
+    return {"node_id": node_id, "items": valid_items}
