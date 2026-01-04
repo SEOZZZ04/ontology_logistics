@@ -12,6 +12,7 @@ from .agent import query_agent
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 시작 시 DB 초기화 및 시뮬레이터 가동
     db.clean_database()
     db.init_schema()
     db.seed_data()
@@ -44,7 +45,7 @@ async def chat(req: ChatRequest):
 
 @app.get("/api/dashboard-stats")
 async def get_dashboard_stats():
-    # 1. 구역별 정확한 물량 카운트
+    # 1. 구역별 물량 카운트
     q1 = """
     MATCH (z:Zone)
     OPTIONAL MATCH (i:Item)-[:STORED_IN]->(z)
@@ -52,7 +53,7 @@ async def get_dashboard_stats():
     """
     zone_stats = db.run_query(q1)
     
-    # 2. 이벤트 목록
+    # 2. 최근 이벤트
     q2 = """
     MATCH (e:Event)
     RETURN e.id as id, e.description as desc, e.type as type
@@ -64,11 +65,13 @@ async def get_dashboard_stats():
 
 @app.get("/api/graph-data")
 async def get_graph_data():
-    # [핵심 변경] Item 노드는 제외하고 가져옵니다! (그래프 고정용)
-    # 오직 인프라(Center, Zone), 자원(AGV, Worker), 사건(Event)만 가져옴
+    # [수정] 관계가 없어도 노드를 가져오도록 쿼리 변경 (OPTIONAL MATCH 사용)
+    # Item 라벨이 없는 모든 노드를 조회
     query = """
-    MATCH (n)-[r]->(m)
-    WHERE NOT labels(n)[0] = 'Item' AND NOT labels(m)[0] = 'Item'
+    MATCH (n)
+    WHERE NOT 'Item' IN labels(n)
+    OPTIONAL MATCH (n)-[r]->(m)
+    WHERE NOT 'Item' IN labels(m)
     RETURN n.id as source_id, labels(n)[0] as source_label, n.name as source_name, n.type as source_type,
            m.id as target_id, labels(m)[0] as target_label, m.name as target_name, m.type as target_type,
            type(r) as edge_type
@@ -78,41 +81,50 @@ async def get_graph_data():
     nodes = {}
     edges = []
     
-    # 당근마켓 스타일 컬러 팔레트
+    # 한국물류 테마 컬러
     color_map = {
-        "Center": "#FF8A3D",    # 당근 주황
-        "Zone": "#FFB985",      # 연한 주황
-        "AGV": "#26C6DA",       # 민트 (기계)
-        "Event_ERROR": "#FF5252", # 에러 (빨강)
-        "Event_PROMOTION": "#AB47BC" # 프로모션 (보라)
+        "Center": "#FF6F00",    # 짙은 주황 (본부)
+        "Zone": "#FF8F00",      # 밝은 주황 (구역)
+        "AGV": "#00897B",       # 청록색 (로봇)
+        "Event_ERROR": "#D32F2F", # 장애 (빨강)
+        "Event_PROMOTION": "#7B1FA2" # 프로모션 (보라)
     }
     
     for row in data:
-        s_id, s_lbl = row['source_id'], row['source_label']
+        # Source Node
+        s_id = row['source_id']
+        s_lbl = row['source_label']
         s_color_key = f"{s_lbl}_{row.get('source_type', '')}" if s_lbl == 'Event' else s_lbl
         
-        if s_id not in nodes:
-            nodes[s_id] = {
-                "id": s_id, 
-                "label": row.get('source_name', s_id),
-                "group": s_lbl,
-                "color": color_map.get(s_color_key, "#CFD8DC") # 기본 회색
-            }
+        nodes[s_id] = {
+            "id": s_id, 
+            "label": row.get('source_name', s_id),
+            "group": s_lbl,
+            "color": color_map.get(s_color_key, "#90A4AE"),
+            "font": {"color": "#37474F"}
+        }
 
-        t_id, t_lbl = row['target_id'], row['target_label']
-        t_color_key = f"{t_lbl}_{row.get('target_type', '')}" if t_lbl == 'Event' else t_lbl
+        # Target Node & Edge (Target이 있을 때만)
+        if row['target_id']:
+            t_id = row['target_id']
+            t_lbl = row['target_label']
+            t_color_key = f"{t_lbl}_{row.get('target_type', '')}" if t_lbl == 'Event' else t_lbl
 
-        if t_id not in nodes:
-             nodes[t_id] = {
+            nodes[t_id] = {
                 "id": t_id, 
                 "label": row.get('target_name', t_id),
                 "group": t_lbl,
-                "color": color_map.get(t_color_key, "#CFD8DC")
+                "color": color_map.get(t_color_key, "#90A4AE"),
+                "font": {"color": "#37474F"}
             }
             
-        edges.append({
-            "from": s_id, "to": t_id, "label": row['edge_type'],
-            "color": {"color": "#B0BEC5"}, "arrows": "to"
-        })
+            # 중복 엣지 방지
+            edge_id = f"{s_id}-{t_id}"
+            if not any(e['id'] == edge_id for e in edges):
+                edges.append({
+                    "id": edge_id,
+                    "from": s_id, "to": t_id, "label": row['edge_type'],
+                    "color": {"color": "#CFD8DC"}, "arrows": "to"
+                })
     
     return {"nodes": list(nodes.values()), "edges": edges}
