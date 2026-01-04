@@ -6,14 +6,14 @@ from pydantic import BaseModel
 import asyncio
 from contextlib import asynccontextmanager
 
-# 기존 DB/Sim/Agent 모듈은 그대로 활용 (데이터 생성/저장은 필요하므로)
+# 기존 모듈 가져오기
 from .database import db
 from .simulator import simulator
 from .agent import query_agent
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. DB 초기화 및 기초 데이터 생성
+    # 1. DB 초기화
     db.clean_database()
     db.init_schema()
     db.seed_data()
@@ -35,16 +35,23 @@ class ChatRequest(BaseModel):
 async def read_root():
     return RedirectResponse(url="/ui/index.html")
 
+# [수정] LLM 채팅 엔드포인트 보완
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    # 검색 및 질문 처리
-    result = await query_agent(req.message)
-    return result
+    print(f"💬 [Chat 요청] 사용자: {req.message}") # 터미널 로그 추가
+    try:
+        # agent.py의 query_agent 함수 호출
+        result = await query_agent(req.message)
+        print(f"🤖 [Chat 응답] AI: {result['reply'][:30]}...") 
+        return result
+    except Exception as e:
+        print(f"❌ [Chat 에러] {str(e)}")
+        return {"reply": "죄송합니다. 내부 시스템 오류로 답변할 수 없습니다.", "related_nodes": []}
 
-# [핵심 1] 온톨로지 구조(뼈대)만 리턴하는 API
+# [데이터 API 1] 온톨로지 구조 (노드/엣지) - 한 번만 로딩
 @app.get("/api/ontology-structure")
 async def get_ontology_structure():
-    # Item, Event는 제외하고 오직 센터, 구역, 장비만 조회
+    # Item, Event 제외 -> 구조만 리턴
     query = """
     MATCH (n)
     WHERE labels(n)[0] IN ['Center', 'Zone', 'AGV']
@@ -60,25 +67,24 @@ async def get_ontology_structure():
     edges = []
     
     for row in data:
-        # 노드 생성
         s_id = row['source_id']
+        # 그룹 설정 (시각화용)
         nodes[s_id] = {"id": s_id, "label": row['source_name'], "group": row['source_label']}
         
         if row['target_id']:
             t_id = row['target_id']
             nodes[t_id] = {"id": t_id, "label": row['target_name'], "group": row['target_label']}
             
-            # 엣지 생성
             edge_key = f"{s_id}-{t_id}"
             if not any(e['id'] == edge_key for e in edges):
                 edges.append({"id": edge_key, "from": s_id, "to": t_id, "label": row['edge_type']})
 
     return {"nodes": list(nodes.values()), "edges": edges}
 
-# [핵심 2] 상태(색상 변경용) 데이터 리턴
+# [데이터 API 2] 실시간 상태 (카운트 & 에러)
 @app.get("/api/system-status")
 async def get_system_status():
-    # 1. 구역별 물동량 카운트
+    # 1. 구역별 물동량 (상단 카드용)
     q_count = """
     MATCH (z:Zone)
     OPTIONAL MATCH (i:Item)-[:STORED_IN]->(z)
@@ -86,22 +92,17 @@ async def get_system_status():
     """
     counts = {row['id']: row['count'] for row in db.run_query(q_count)}
     
-    # 2. 현재 발생한 '장애(ERROR)' 이벤트가 연결된 구역 찾기
-    # 이벤트 노드(Event)가 센터(Center)나 특정 구역과 연결되어 있을 수 있음
-    # 시뮬레이터 로직상 Event는 Center에 달리지만, 
-    # 여기서는 '설명(description)'이나 로직을 통해 어디가 문제인지 판단하여 프론트로 보냄
+    # 2. 장애 이벤트 확인
     q_error = """
     MATCH (e:Event {type: 'ERROR'})
     RETURN e.description as desc
     """
     errors = db.run_query(q_error)
     
-    # 장애가 발생한 노드 ID 목록 (단순화: 에러 있으면 무조건 Z_IN, Z_SORT 등 관련 구역 빨간색)
+    # 장애 발생 시 관련 노드(Zone) ID 추출
     error_nodes = []
     if errors:
-        # 장애가 존재하면 주요 라인 전체를 경고 상태로
-        # (더 정교하게 하려면 Event와 Zone을 연결해야 하지만, 시각적 효과를 위해 단순화)
-        error_nodes = ['Z_IN', 'Z_SORT'] 
+        error_nodes = ['Z_IN', 'Z_SORT'] # 장애 시 입고/분류 라인 경고
 
     return {
         "counts": counts,
