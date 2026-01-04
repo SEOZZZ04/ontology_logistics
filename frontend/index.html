@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Logistics AI Cockpit</title>
+    <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+    <style>
+        body { display: flex; height: 100vh; margin: 0; font-family: sans-serif; }
+        #graph-container { width: 70%; height: 100%; background: #f0f0f0; border-right: 2px solid #ddd; }
+        #chat-container { width: 30%; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; }
+        #messages { flex: 1; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; background: white; }
+        .msg { margin: 5px 0; padding: 8px; border-radius: 5px; }
+        .user { background: #e3f2fd; text-align: right; }
+        .bot { background: #f1f8e9; }
+        input { padding: 10px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div id="graph-container"></div>
+    <div id="chat-container">
+        <h2>🤖 AI Operation Center</h2>
+        <div id="messages"></div>
+        <input type="text" id="chat-input" placeholder="Ask AI (e.g., '현재 상황 어때?', '장애 있어?')..." onkeypress="handleKey(event)">
+    </div>
+
+    <script>
+        // 1. 그래프 시각화 설정 (Vis.js)
+        var container = document.getElementById('graph-container');
+        var data = { nodes: new vis.DataSet([]), edges: new vis.DataSet([]) };
+        var options = {
+            physics: { stabilization: false },
+            edges: { arrows: 'to', smooth: true }
+        };
+        var network = new vis.Network(container, data, options);
+
+        // 2. 데이터 폴링 (2초마다 그래프 갱신)
+        async function fetchGraphData() {
+            try {
+                const res = await fetch('/api/graph-data');
+                const json = await res.json();
+                
+                // 기존 데이터 유지하면서 업데이트 (깜빡임 방지)
+                data.nodes.update(json.nodes);
+                data.edges.update(json.edges);
+            } catch (err) { console.error(err); }
+        }
+        setInterval(fetchGraphData, 2000);
+
+        // 3. 채팅 로직
+        async function sendMessage() {
+            const input = document.getElementById('chat-input');
+            const text = input.value;
+            if (!text) return;
+
+            addMessage(text, 'user');
+            input.value = '';
+            addMessage('Thinking...', 'bot');
+
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: text})
+            });
+            const json = await res.json();
+            
+            // "Thinking..." 지우고 실제 답변
+            document.getElementById('messages').lastChild.remove();
+            addMessage(json.reply, 'bot');
+        }
+
+        function addMessage(text, sender) {
+            const div = document.createElement('div');
+            div.className = `msg ${sender}`;
+            div.innerText = text;
+            document.getElementById('messages').appendChild(div);
+            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+        }
+
+        function handleKey(e) {
+            if (e.key === 'Enter') sendMessage();
+        }
+    </script>
+</body>
+</html>
