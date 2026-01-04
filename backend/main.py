@@ -22,9 +22,7 @@ async def lifespan(app: FastAPI):
     db.close()
 
 app = FastAPI(lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
-)
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 app.mount("/ui", StaticFiles(directory="frontend", html=True), name="ui")
 
 class ChatRequest(BaseModel):
@@ -41,6 +39,7 @@ async def chat(req: ChatRequest):
 
 @app.get("/api/dashboard-stats")
 async def get_dashboard_stats():
+    # 정확한 물량 집계
     q1 = """
     MATCH (z:Zone)
     OPTIONAL MATCH (i:Item)-[:STORED_IN]->(z)
@@ -48,6 +47,7 @@ async def get_dashboard_stats():
     """
     zone_stats = db.run_query(q1)
     
+    # 최근 이벤트
     q2 = """
     MATCH (e:Event)
     RETURN e.id as id, e.description as desc, e.type as type
@@ -58,16 +58,13 @@ async def get_dashboard_stats():
 
 @app.get("/api/graph-data")
 async def get_graph_data():
-    # [수정] n.x, n.y 좌표값도 같이 가져옴
+    # [핵심] Item 제외, 모든 노드 조회. 
+    # 관계가 없어도 노드는 리턴 (OPTIONAL MATCH)
     query = """
-    MATCH (n)
-    WHERE NOT 'Item' IN labels(n)
-    OPTIONAL MATCH (n)-[r]->(m)
-    WHERE NOT 'Item' IN labels(m)
-    RETURN n.id as source_id, labels(n)[0] as source_label, n.name as source_name, 
-           n.x as x, n.y as y, n.type as source_type,
-           m.id as target_id, labels(m)[0] as target_label, m.name as target_name, 
-           m.x as tx, m.y as ty, m.type as target_type,
+    MATCH (n) WHERE NOT 'Item' IN labels(n)
+    OPTIONAL MATCH (n)-[r]->(m) WHERE NOT 'Item' IN labels(m)
+    RETURN n.id as source_id, labels(n)[0] as source_label, n.name as source_name, n.type as source_type,
+           m.id as target_id, labels(m)[0] as target_label, m.name as target_name, m.type as target_type,
            type(r) as edge_type
     """
     data = db.run_query(query)
@@ -77,7 +74,7 @@ async def get_graph_data():
     
     color_map = {
         "Center": "#FF6F00", "Zone": "#FF8F00", "AGV": "#00897B",
-        "Event_ERROR": "#D32F2F", "Event_PROMOTION": "#7B1FA2"
+        "Event_ERROR": "#D32F2F", "Event_PROMO": "#7B1FA2"
     }
     
     for row in data:
@@ -86,11 +83,9 @@ async def get_graph_data():
         s_lbl = row['source_label']
         s_key = f"{s_lbl}_{row.get('source_type', '')}" if s_lbl == 'Event' else s_lbl
         
-        # 좌표(x, y)가 있으면 노드 데이터에 포함
         nodes[s_id] = {
             "id": s_id, "label": row.get('source_name', s_id), "group": s_lbl,
-            "color": color_map.get(s_key, "#90A4AE"), "font": {"color": "#37474F"},
-            "x": row.get('x'), "y": row.get('y') # 좌표 할당
+            "color": color_map.get(s_key, "#90A4AE"), "font": {"color": "#fff" if s_lbl=="Event" else "#000"}
         }
 
         # Target Node
@@ -101,15 +96,14 @@ async def get_graph_data():
 
             nodes[t_id] = {
                 "id": t_id, "label": row.get('target_name', t_id), "group": t_lbl,
-                "color": color_map.get(t_key, "#90A4AE"), "font": {"color": "#37474F"},
-                "x": row.get('tx'), "y": row.get('ty')
+                "color": color_map.get(t_key, "#90A4AE")
             }
             
-            edge_id = f"{s_id}-{t_id}"
-            if not any(e['id'] == edge_id for e in edges):
+            edge_key = f"{s_id}-{t_id}"
+            if not any(e['id'] == edge_key for e in edges):
                 edges.append({
-                    "id": edge_id, "from": s_id, "to": t_id, 
-                    "label": row['edge_type'], "color": {"color": "#CFD8DC"}, "arrows": "to"
+                    "id": edge_key, "from": s_id, "to": t_id, "label": row['edge_type'],
+                    "arrows": "to", "color": {"color": "#CFD8DC"}
                 })
     
     return {"nodes": list(nodes.values()), "edges": edges}
