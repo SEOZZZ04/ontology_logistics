@@ -12,6 +12,9 @@ from .agent import query_agent
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # [수정됨] 시작할 때 DB를 깨끗하게 비우고 시작 (ConstraintError 해결)
+    db.clean_database()
+    
     db.init_schema()
     db.seed_data()
     sim_task = asyncio.create_task(simulator.start())
@@ -36,16 +39,13 @@ class ChatRequest(BaseModel):
 
 @app.get("/")
 async def read_root():
-    # 접속 시 바로 UI로 리다이렉트
     return RedirectResponse(url="/ui/index.html")
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    # agent가 반환하는 dict (reply, related_nodes)를 그대로 프론트에 전달
     result = await query_agent(req.message)
     return result
 
-# [New] 우측 상단 대시보드용 통계 API
 @app.get("/api/dashboard-stats")
 async def get_dashboard_stats():
     # 1. 구역별 물동량
@@ -75,13 +75,14 @@ async def get_graph_data():
     
     nodes = {}
     edges = []
+    
     # 산업 현장 느낌의 색상 팔레트
     color_map = {
-        "Center": {"background": "#FFC107", "border": "#FFA000"}, # 노랑 (강조)
-        "Zone": {"background": "#0277BD", "border": "#01579B"},   # 짙은 파랑
-        "AGV": {"background": "#00C853", "border": "#00A844"},    # 녹색 (정상)
-        "Item": {"background": "#B0BEC5", "border": "#90A4AE"},   # 회색 (일반)
-        "Event": {"background": "#D32F2F", "border": "#B71C1C"}   # 빨강 (장애/경고)
+        "Center": {"background": "#FFC107", "border": "#FFA000"}, 
+        "Zone": {"background": "#0277BD", "border": "#01579B"},
+        "AGV": {"background": "#00C853", "border": "#00A844"},
+        "Item": {"background": "#B0BEC5", "border": "#90A4AE"},
+        "Event": {"background": "#D32F2F", "border": "#B71C1C"}
     }
     
     for row in data:
@@ -107,7 +108,7 @@ async def get_graph_data():
             "from": s_id, 
             "to": t_id, 
             "label": row['edge_type'],
-            "color": {"color": "#546E7A"}, # 엣지 색상 (차분한 회색)
+            "color": {"color": "#546E7A"},
             "arrows": "to"
         })
     
