@@ -139,7 +139,7 @@
                 },
                 stabilization: {
                     enabled: true,
-                    iterations: 1000, // 처음에만 계산하고 멈춤
+                    iterations: 1000,
                     updateInterval: 25,
                     onlyDynamicEdges: false,
                     fit: true
@@ -149,7 +149,6 @@
         };
         const network = new vis.Network(container, data, options);
         
-        // 안정화되면 물리 엔진 끄기 (난잡한 움직임 방지)
         network.once("stabilizationIterationsDone", function() {
             network.setOptions( { physics: false } );
         });
@@ -158,19 +157,17 @@
         // =========================================
         // 2. 데이터 폴링 (그래프 & 대시보드 업데이트)
         // =========================================
-        let isHighlightActive = false; // 하이라이트 중엔 업데이트 일시 정지
+        let isHighlightActive = false;
 
         async function fetchData() {
             if (isHighlightActive) return;
 
             try {
-                // 2.1 그래프 데이터 업데이트
                 const graphRes = await fetch('/api/graph-data');
                 const graphJson = await graphRes.json();
                 nodesDS.update(graphJson.nodes);
                 edgesDS.update(graphJson.edges);
 
-                // 2.2 대시보드 데이터 업데이트
                 const dashRes = await fetch('/api/dashboard-stats');
                 const dashJson = await dashRes.json();
                 updateDashboard(dashJson);
@@ -182,19 +179,18 @@
             document.getElementById('alert-count').innerText = data.errors;
             
             const container = document.getElementById('zone-stats-container');
-            container.innerHTML = ''; // 초기화
+            container.innerHTML = '';
             data.zones.forEach(z => {
                 const div = document.createElement('div');
                 div.className = 'zone-stat stat-card';
-                div.style.borderLeftColor = '#0277BD'; // 파란색
+                div.style.borderLeftColor = '#0277BD';
                 div.innerHTML = `<div class="stat-title">${z.name}</div><div class="stat-value">${z.count}</div>`;
                 container.appendChild(div);
             });
         }
         
-        // 3초마다 데이터 갱신
         setInterval(fetchData, 3000);
-        fetchData(); // 초기 실행
+        fetchData();
 
 
         // =========================================
@@ -207,7 +203,7 @@
 
             addMessage(text, 'user');
             input.value = '';
-            addMessage('분석 중입니다...', 'bot', true); # temporary message
+            addMessage('분석 중입니다...', 'bot', true); 
 
             try {
                 const res = await fetch('/api/chat', {
@@ -216,10 +212,10 @@
                 });
                 const json = await res.json();
                 
-                document.getElementById('messages').lastChild.remove(); # remove temp message
+                // [수정됨] 파이썬 주석(#)을 자바스크립트 주석(//)으로 변경
+                document.getElementById('messages').lastChild.remove(); 
                 addMessage(json.reply, 'bot');
 
-                // 핵심: 관련된 노드가 있으면 하이라이트 실행
                 if (json.related_nodes && json.related_nodes.length > 0) {
                     highlightNodes(json.related_nodes);
                 } else {
@@ -227,29 +223,29 @@
                 }
 
             } catch (e) {
-                document.getElementById('messages').lastChild.textContent = "에러가 발생했습니다.";
+                if(document.getElementById('messages').lastChild) {
+                    document.getElementById('messages').lastChild.textContent = "에러가 발생했습니다.";
+                }
                 resetHighlight();
+                console.error(e);
             }
         }
 
-        // 하이라이트 함수
         function highlightNodes(relatedIds) {
-            isHighlightActive = true; // 폴링 일시정지
+            isHighlightActive = true;
             const allNodes = nodesDS.get();
             const updateArray = [];
             const highlightIdsSet = new Set(relatedIds);
 
             allNodes.forEach(node => {
                 if (highlightIdsSet.has(node.id)) {
-                    // 강조 대상: 밝게 빛나게 (원래 색상보다 채도 높임)
                     updateArray.push({
                         id: node.id,
-                        color: { background: '#FFFFFF', border: '#FFD700' }, // 흰색 바탕에 금색 테두리
+                        color: { background: '#FFFFFF', border: '#FFD700' },
                         font: { size: 18, color: '#FFFFFF', background: '#000000' },
-                        shadow: { enabled: true, color: 'rgba(255,215,0,0.8)', size: 20 } // 빛나는 효과
+                        shadow: { enabled: true, color: 'rgba(255,215,0,0.8)', size: 20 }
                     });
                 } else {
-                    // 비대상: 어둡게 처리 (Dimmed)
                     updateArray.push({
                         id: node.id,
                         color: { background: '#333333', border: '#222222' },
@@ -260,19 +256,15 @@
             });
             nodesDS.update(updateArray);
             
-            // 강조된 노드들 중심으로 카메라 줌인
             if (relatedIds.length > 0) {
                 network.fit({ nodes: relatedIds, animation: true });
             }
         }
 
-        // 하이라이트 초기화 (원래대로 복구)
         function resetHighlight() {
             isHighlightActive = false;
-            // 다음 폴링 때 색상이 원래대로 돌아오므로 여기선 플래그만 해제해도 됨
-            // 즉시 복구를 원하면 여기서 전체 노드 업데이트를 한 번 수행해야 함
-             fetchData(); // 즉시 데이터 리로드하여 색상 복구
-             network.fit({ animation: true }); // 전체 뷰로 복귀
+             fetchData(); 
+             network.fit({ animation: true });
         }
 
         function addMessage(text, sender, isTemp=false) {
