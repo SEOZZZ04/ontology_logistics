@@ -1,51 +1,205 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
-    <title>Logistics AI Cockpit</title>
+    <meta charset="UTF-8">
+    <title>Logistics Command Center</title>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <style>
-        body { display: flex; height: 100vh; margin: 0; font-family: sans-serif; }
-        #graph-container { width: 70%; height: 100%; background: #f0f0f0; border-right: 2px solid #ddd; }
-        #chat-container { width: 30%; display: flex; flex-direction: column; padding: 20px; box-sizing: border-box; }
-        #messages { flex: 1; overflow-y: auto; border: 1px solid #ddd; padding: 10px; margin-bottom: 10px; background: white; }
-        .msg { margin: 5px 0; padding: 8px; border-radius: 5px; }
-        .user { background: #e3f2fd; text-align: right; }
-        .bot { background: #f1f8e9; }
-        input { padding: 10px; font-size: 16px; }
+        /* Industrial Dark Theme */
+        :root {
+            --bg-dark: #121212;
+            --bg-panel: #1E1E1E;
+            --text-primary: #E0E0E0;
+            --text-secondary: #A0A0A0;
+            --accent-blue: #2196F3;
+            --accent-red: #FF5252;
+            --border-color: #333;
+        }
+        body { 
+            display: flex; height: 100vh; margin: 0; 
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-dark); color: var(--text-primary);
+            overflow: hidden;
+        }
+        #main-container { display: flex; width: 100%; height: 100%; }
+        
+        /* Left: Graph Area */
+        #graph-panel { flex: 7; height: 100%; border-right: 2px solid var(--border-color); position: relative; }
+        #graph-container { width: 100%; height: 100%; background: #191919; }
+        .panel-title {
+            position: absolute; top: 10px; left: 20px; 
+            font-size: 1.2rem; font-weight: bold; color: var(--accent-blue);
+            z-index: 10; text-transform: uppercase; letter-spacing: 1px;
+        }
+
+        /* Right: Sidebar */
+        #sidebar { flex: 3; display: flex; flex-direction: column; height: 100%; background: var(--bg-panel); }
+
+        /* Top-Right: Dashboard */
+        #dashboard-panel { 
+            flex: 4; padding: 20px; border-bottom: 2px solid var(--border-color);
+            display: flex; flex-direction: column;
+        }
+        .stat-card {
+            background: #2C2C2C; padding: 15px; margin-bottom: 10px;
+            border-radius: 4px; border-left: 4px solid var(--accent-blue);
+        }
+        .stat-card.alert { border-left-color: var(--accent-red); }
+        .stat-title { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 5px; }
+        .stat-value { font-size: 1.5rem; font-weight: bold; }
+        #zone-stats-container { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;}
+        .zone-stat { flex: 1; min-width: 80px; text-align: center; background:#252525; padding: 10px; border-radius:4px;}
+
+        /* Bottom-Right: Chat */
+        #chat-panel { flex: 6; display: flex; flex-direction: column; padding: 20px; overflow: hidden; }
+        #messages { flex: 1; overflow-y: auto; border: 1px solid var(--border-color); padding: 10px; margin-bottom: 10px; background: #151515; }
+        .msg { margin: 5px 0; padding: 10px 12px; border-radius: 4px; max-width: 80%; word-break: break-word;}
+        .user { background: #0D47A1; align-self: flex-end; margin-left: auto; }
+        .bot { background: #37474F; }
+        #chat-input-container { display: flex; }
+        #chat-input { 
+            flex: 1; padding: 12px; font-size: 14px; 
+            background: #2C2C2C; border: 1px solid var(--border-color); 
+            color: var(--text-primary); outline: none;
+        }
+        #chat-input::placeholder { color: var(--text-secondary); }
+        
+        /* Vis.js 커스텀 스타일 */
+        div.vis-network div.vis-navigation div.vis-button {
+            background-color: var(--bg-panel);
+            background-image: none;
+            color: var(--text-primary);
+        }
     </style>
 </head>
 <body>
-    <div id="graph-container"></div>
-    <div id="chat-container">
-        <h2>🤖 AI Operation Center</h2>
-        <div id="messages"></div>
-        <input type="text" id="chat-input" placeholder="Ask AI (e.g., '현재 상황 어때?', '장애 있어?')..." onkeypress="handleKey(event)">
+    <div id="main-container">
+        <div id="graph-panel">
+            <div class="panel-title">📡 Real-time Logistics Ontology</div>
+            <div id="graph-container"></div>
+        </div>
+
+        <div id="sidebar">
+            <div id="dashboard-panel">
+                <div class="panel-title" style="position:static; margin-bottom:15px;">📊 Operational Status</div>
+                
+                <div class="stat-card alert">
+                    <div class="stat-title">Active Alerts (Events)</div>
+                    <div class="stat-value" id="alert-count">0</div>
+                </div>
+                
+                <div style="margin-top:10px; font-size:0.9rem; color:var(--text-secondary);">Zone Throughput (Items)</div>
+                <div id="zone-stats-container">
+                    </div>
+            </div>
+
+            <div id="chat-panel">
+                <div class="panel-title" style="position:static; margin-bottom:15px;">🤖 AI Analyst</div>
+                <div id="messages"></div>
+                <div id="chat-input-container">
+                    <input type="text" id="chat-input" placeholder="명령을 입력하세요 (예: '현재 장애 현황 보여줘')..." onkeypress="handleKey(event)">
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // 1. 그래프 시각화 설정 (Vis.js)
-        var container = document.getElementById('graph-container');
-        var data = { nodes: new vis.DataSet([]), edges: new vis.DataSet([]) };
-        var options = {
-            physics: { stabilization: false },
-            edges: { arrows: 'to', smooth: true }
-        };
-        var network = new vis.Network(container, data, options);
+        // =========================================
+        // 1. 그래프 초기화 (Vis.js Settings)
+        // =========================================
+        const container = document.getElementById('graph-container');
+        const nodesDS = new vis.DataSet([]);
+        const edgesDS = new vis.DataSet([]);
+        const data = { nodes: nodesDS, edges: edgesDS };
 
-        // 2. 데이터 폴링 (2초마다 그래프 갱신)
-        async function fetchGraphData() {
+        const options = {
+            nodes: {
+                shape: 'dot',
+                size: 20,
+                font: { size: 14, color: '#E0E0E0', strokeWidth: 2, strokeColor: '#121212' },
+                borderWidth: 2,
+                shadow: true
+            },
+            edges: {
+                width: 2,
+                shadow: false,
+                smooth: { type: 'continuous' },
+                arrows: { to: { enabled: true, scaleFactor: 0.5 } }
+            },
+            physics: {
+                enabled: true,
+                solver: 'forceAtlas2Based',
+                forceAtlas2Based: {
+                    gravitationalConstant: -50,
+                    centralGravity: 0.01,
+                    springConstant: 0.08,
+                    springLength: 100,
+                    damping: 0.4,
+                    avoidOverlap: 0.5
+                },
+                stabilization: {
+                    enabled: true,
+                    iterations: 1000, // 처음에만 계산하고 멈춤
+                    updateInterval: 25,
+                    onlyDynamicEdges: false,
+                    fit: true
+                }
+            },
+            interaction: { hover: true, tooltipDelay: 200, hideEdgesOnDrag: true }
+        };
+        const network = new vis.Network(container, data, options);
+        
+        // 안정화되면 물리 엔진 끄기 (난잡한 움직임 방지)
+        network.once("stabilizationIterationsDone", function() {
+            network.setOptions( { physics: false } );
+        });
+
+
+        // =========================================
+        // 2. 데이터 폴링 (그래프 & 대시보드 업데이트)
+        // =========================================
+        let isHighlightActive = false; // 하이라이트 중엔 업데이트 일시 정지
+
+        async function fetchData() {
+            if (isHighlightActive) return;
+
             try {
-                const res = await fetch('/api/graph-data');
-                const json = await res.json();
-                
-                // 기존 데이터 유지하면서 업데이트 (깜빡임 방지)
-                data.nodes.update(json.nodes);
-                data.edges.update(json.edges);
+                // 2.1 그래프 데이터 업데이트
+                const graphRes = await fetch('/api/graph-data');
+                const graphJson = await graphRes.json();
+                nodesDS.update(graphJson.nodes);
+                edgesDS.update(graphJson.edges);
+
+                // 2.2 대시보드 데이터 업데이트
+                const dashRes = await fetch('/api/dashboard-stats');
+                const dashJson = await dashRes.json();
+                updateDashboard(dashJson);
+
             } catch (err) { console.error(err); }
         }
-        setInterval(fetchGraphData, 2000);
 
-        // 3. 채팅 로직
+        function updateDashboard(data) {
+            document.getElementById('alert-count').innerText = data.errors;
+            
+            const container = document.getElementById('zone-stats-container');
+            container.innerHTML = ''; // 초기화
+            data.zones.forEach(z => {
+                const div = document.createElement('div');
+                div.className = 'zone-stat stat-card';
+                div.style.borderLeftColor = '#0277BD'; // 파란색
+                div.innerHTML = `<div class="stat-title">${z.name}</div><div class="stat-value">${z.count}</div>`;
+                container.appendChild(div);
+            });
+        }
+        
+        // 3초마다 데이터 갱신
+        setInterval(fetchData, 3000);
+        fetchData(); // 초기 실행
+
+
+        // =========================================
+        // 3. 채팅 & 인터랙티브 하이라이팅 로직
+        // =========================================
         async function sendMessage() {
             const input = document.getElementById('chat-input');
             const text = input.value;
@@ -53,21 +207,75 @@
 
             addMessage(text, 'user');
             input.value = '';
-            addMessage('Thinking...', 'bot');
+            addMessage('분석 중입니다...', 'bot', true); # temporary message
 
-            const res = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({message: text})
-            });
-            const json = await res.json();
-            
-            // "Thinking..." 지우고 실제 답변
-            document.getElementById('messages').lastChild.remove();
-            addMessage(json.reply, 'bot');
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: text})
+                });
+                const json = await res.json();
+                
+                document.getElementById('messages').lastChild.remove(); # remove temp message
+                addMessage(json.reply, 'bot');
+
+                // 핵심: 관련된 노드가 있으면 하이라이트 실행
+                if (json.related_nodes && json.related_nodes.length > 0) {
+                    highlightNodes(json.related_nodes);
+                } else {
+                    resetHighlight();
+                }
+
+            } catch (e) {
+                document.getElementById('messages').lastChild.textContent = "에러가 발생했습니다.";
+                resetHighlight();
+            }
         }
 
-        function addMessage(text, sender) {
+        // 하이라이트 함수
+        function highlightNodes(relatedIds) {
+            isHighlightActive = true; // 폴링 일시정지
+            const allNodes = nodesDS.get();
+            const updateArray = [];
+            const highlightIdsSet = new Set(relatedIds);
+
+            allNodes.forEach(node => {
+                if (highlightIdsSet.has(node.id)) {
+                    // 강조 대상: 밝게 빛나게 (원래 색상보다 채도 높임)
+                    updateArray.push({
+                        id: node.id,
+                        color: { background: '#FFFFFF', border: '#FFD700' }, // 흰색 바탕에 금색 테두리
+                        font: { size: 18, color: '#FFFFFF', background: '#000000' },
+                        shadow: { enabled: true, color: 'rgba(255,215,0,0.8)', size: 20 } // 빛나는 효과
+                    });
+                } else {
+                    // 비대상: 어둡게 처리 (Dimmed)
+                    updateArray.push({
+                        id: node.id,
+                        color: { background: '#333333', border: '#222222' },
+                        font: { color: '#555555' },
+                        shadow: { enabled: false }
+                    });
+                }
+            });
+            nodesDS.update(updateArray);
+            
+            // 강조된 노드들 중심으로 카메라 줌인
+            if (relatedIds.length > 0) {
+                network.fit({ nodes: relatedIds, animation: true });
+            }
+        }
+
+        // 하이라이트 초기화 (원래대로 복구)
+        function resetHighlight() {
+            isHighlightActive = false;
+            // 다음 폴링 때 색상이 원래대로 돌아오므로 여기선 플래그만 해제해도 됨
+            // 즉시 복구를 원하면 여기서 전체 노드 업데이트를 한 번 수행해야 함
+             fetchData(); // 즉시 데이터 리로드하여 색상 복구
+             network.fit({ animation: true }); // 전체 뷰로 복귀
+        }
+
+        function addMessage(text, sender, isTemp=false) {
             const div = document.createElement('div');
             div.className = `msg ${sender}`;
             div.innerText = text;
@@ -75,9 +283,7 @@
             document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
         }
 
-        function handleKey(e) {
-            if (e.key === 'Enter') sendMessage();
-        }
+        function handleKey(e) { if (e.key === 'Enter') sendMessage(); }
     </script>
 </body>
 </html>
