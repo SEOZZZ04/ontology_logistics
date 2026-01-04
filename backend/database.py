@@ -20,7 +20,7 @@ class Neo4jHandler:
             return [record.data() for record in result]
 
     def clean_database(self):
-        print("🧹 [DB] 기존 데이터 삭제 및 초기화 중...")
+        print("🧹 [DB] 초기화 중...")
         self.run_query("MATCH (n) DETACH DELETE n")
 
     def init_schema(self):
@@ -42,34 +42,34 @@ class Neo4jHandler:
                 session.run(q)
 
     def seed_data(self):
-        print("🏗️ [DB] 기초 맵(Topology) 생성 중 (좌표 고정)...")
-        # [핵심] x, y 좌표를 속성으로 추가하여 강제 고정
+        print("🏗️ [DB] 기초 온톨로지 생성 중...")
+        # 좌표값 제거 -> 프론트엔드 계층형 레이아웃 사용 예정
         query = """
-        // 1. 센터 (중앙 상단)
-        MERGE (c:Center {id: 'DT_HUB'}) 
-        SET c.name = '동탄 허브', c.x = 0, c.y = -150
+        // 1. 센터
+        MERGE (c:Center {id: 'DT_HUB', name: '한국물류 동탄허브'})
         
-        // 2. 구역 (좌 -> 우 배치)
-        MERGE (z1:Zone {id: 'Z_IN'})   SET z1.name = '입고존', z1.x = -250, z1.y = 0
-        MERGE (z2:Zone {id: 'Z_SORT'}) SET z2.name = '분류존', z2.x = 0,    z2.y = 0
-        MERGE (z3:Zone {id: 'Z_OUT'})  SET z3.name = '출고존', z3.x = 250,  z3.y = 0
+        // 2. 구역
+        MERGE (z1:Zone {id: 'Z_IN', name: '입고존(Inbound)'})
+        MERGE (z2:Zone {id: 'Z_SORT', name: '분류존(Sorting)'})
+        MERGE (z3:Zone {id: 'Z_OUT', name: '출고존(Outbound)'})
 
-        // 3. 관계 연결
+        // 3. 구조 연결 (Center -> Zones)
         MERGE (c)-[:HAS_ZONE]->(z1)
         MERGE (c)-[:HAS_ZONE]->(z2)
         MERGE (c)-[:HAS_ZONE]->(z3)
 
-        MERGE (z1)-[:CONNECTED_TO]->(z2)
-        MERGE (z2)-[:CONNECTED_TO]->(z3)
+        // 4. 물류 흐름 연결 (In -> Sort -> Out)
+        MERGE (z1)-[:NEXT_STEP]->(z2)
+        MERGE (z2)-[:NEXT_STEP]->(z3)
         
-        // 4. AGV (구역 주변에 배치)
-        MERGE (a1:AGV {id: 'AGV_01'}) SET a1.status = 'IDLE', a1.x = -250, a1.y = 100
-        MERGE (a2:AGV {id: 'AGV_02'}) SET a2.status = 'IDLE', a2.x = 0,    a2.y = 100
+        // 5. AGV 배치
+        MERGE (a1:AGV {id: 'AGV_01', name: 'AGV-01 (대기중)'})
+        MERGE (a2:AGV {id: 'AGV_02', name: 'AGV-02 (대기중)'})
         
         MERGE (a1)-[:LOCATED_AT]->(z1)
         MERGE (a2)-[:LOCATED_AT]->(z2)
         """
         self.run_query(query)
-        print("✅ [DB] 기초 데이터(좌표 포함) 생성 완료.")
+        print("✅ [DB] 기초 데이터 생성 완료.")
 
 db = Neo4jHandler()
