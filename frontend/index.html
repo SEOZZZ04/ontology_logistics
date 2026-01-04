@@ -2,340 +2,258 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Korea Logistics AI Dashboard</title>
+    <title>Smart Logistics Dashboard</title>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" rel="stylesheet">
-    
+    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
     <style>
-        :root { --primary: #FF6F00; --bg-body: #F5F7FA; --bg-card: #FFFFFF; --text-main: #263238; --border: #ECEFF1; }
-        body { margin: 0; height: 100vh; display: flex; font-family: 'Pretendard', sans-serif; background: var(--bg-body); color: var(--text-main); overflow: hidden; }
+        :root { --primary: #FF6F00; --bg-body: #F0F2F5; --text-main: #333; }
+        body { margin: 0; height: 100vh; display: flex; font-family: 'Pretendard', sans-serif; background: var(--bg-body); overflow: hidden; }
+
+        /* 왼쪽 메인 (상태창 + 그래프) */
+        #main-container { flex: 7; display: flex; flex-direction: column; border-right: 1px solid #ddd; }
         
-        /* 왼쪽 메인 영역 */
-        #main-view { flex: 7; display: flex; flex-direction: column; border-right: 1px solid var(--border); }
-        
-        /* 1. 상단 프로세스 패널 (카드 UI 복구) */
-        #top-process-panel { height: 140px; background: var(--bg-card); padding: 0 20px; display: flex; justify-content: center; align-items: center; gap: 30px; border-bottom: 1px solid var(--border); box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
-        
-        .process-card { background: white; border: 2px solid var(--border); border-radius: 12px; width: 150px; padding: 15px; text-align: center; cursor: pointer; transition: 0.2s; position: relative; }
-        .process-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .process-card.active { border-color: var(--primary); background: #FFF8E1; }
-        .p-icon { font-size: 1.5rem; color: var(--primary); margin-bottom: 5px; }
-        .p-title { font-weight: bold; font-size: 0.9rem; color: #546E7A; }
-        .p-count { font-size: 2rem; font-weight: 800; margin-top: 5px; color: #263238; }
-        
-        .arrow-divider { color: #CFD8DC; font-size: 1.2rem; }
+        /* 1. 상단 카드 패널 */
+        #status-panel { height: 160px; background: white; display: flex; justify-content: center; align-items: center; gap: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); z-index: 10; }
+        .card { width: 160px; padding: 20px; border-radius: 16px; background: white; border: 2px solid #eee; text-align: center; cursor: pointer; transition: 0.2s; }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .card.active { border-color: var(--primary); background: #FFF8E1; }
+        .card-icon { font-size: 24px; color: var(--primary); margin-bottom: 10px; }
+        .card-title { font-size: 14px; color: #666; font-weight: 600; }
+        .card-value { font-size: 32px; font-weight: 800; color: #222; margin-top: 5px; }
+        .arrow { color: #ccc; font-size: 20px; }
 
         /* 2. 하단 그래프 패널 */
-        #bottom-graph-panel { flex: 1; position: relative; background: #FAFAFA; }
-        #graph-container { width: 100%; height: 100%; }
-        
-        /* 온톨로지 라벨 */
-        .graph-label { position: absolute; top: 15px; left: 15px; background: white; padding: 8px 12px; border-radius: 20px; border: 1px solid #CFD8DC; font-size: 0.85rem; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.05); color: #455A64; display: flex; align-items: center; gap: 5px; }
+        #graph-panel { flex: 1; position: relative; background: #fafafa; }
+        #network { width: 100%; height: 100%; }
+        .graph-badge { position: absolute; top: 15px; left: 15px; background: white; padding: 8px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); color: #555; }
 
-        /* 오른쪽 사이드바 (채팅/로그) */
-        #sidebar { flex: 3; display: flex; flex-direction: column; background: var(--bg-card); border-left: 1px solid var(--border); }
+        /* 오른쪽 사이드바 (로그 + 채팅) */
+        #sidebar { flex: 3; display: flex; flex-direction: column; background: white; }
         
-        #info-panel { height: 30%; padding: 20px; border-bottom: 1px solid var(--border); overflow-y: auto; background: #FFF; }
-        #info-title { font-weight: bold; color: var(--primary); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
-        
-        #chat-panel { height: 70%; display: flex; flex-direction: column; background: #F5F7FA; }
-        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { padding: 10px 14px; border-radius: 12px; max-width: 85%; font-size: 0.9rem; line-height: 1.4; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        .user { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .bot { background: white; border: 1px solid #E0E0E0; align-self: flex-start; border-bottom-left-radius: 2px; }
-        
-        #input-area { padding: 15px; background: white; border-top: 1px solid #E0E0E0; }
-        #chat-input { width: 93%; padding: 12px; border: 1px solid #CFD8DC; border-radius: 25px; outline: none; transition: 0.2s; font-family: inherit; }
-        #chat-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(255, 111, 0, 0.1); }
+        #log-section { height: 35%; padding: 20px; border-bottom: 1px solid #eee; overflow-y: auto; background: #fff; }
+        #log-title { font-weight: bold; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; color: var(--primary); }
+        .log-item { padding: 12px; margin-bottom: 8px; border-radius: 8px; font-size: 13px; background: #f8f9fa; border-left: 4px solid #ddd; }
+        .log-item.ERROR { background: #FFEBEE; border-left-color: #D32F2F; color: #B71C1C; }
+        .log-item.PROMO { background: #F3E5F5; border-left-color: #7B1FA2; color: #4A148C; }
 
-        /* 이벤트 알림 스타일 */
-        .event-item { padding: 12px; border-radius: 8px; margin-bottom: 8px; font-size: 0.9rem; border-left: 4px solid #ccc; background: #f9f9f9; }
-        .event-item.ERROR { border-left-color: #D32F2F; background: #FFEBEE; color: #C62828; font-weight: bold; animation: pulse 2s infinite; }
-        .event-item.PROMO { border-left-color: #7B1FA2; background: #F3E5F5; color: #6A1B9A; }
+        #chat-section { flex: 1; display: flex; flex-direction: column; background: #f8f9fa; }
+        #chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
+        .msg.bot { background: white; border: 1px solid #ddd; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .msg.user { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
         
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.8; } 100% { opacity: 1; } }
+        #chat-input-area { padding: 20px; background: white; border-top: 1px solid #eee; }
+        #chat-input { width: 93%; padding: 14px; border: 1px solid #ddd; border-radius: 30px; outline: none; transition: 0.2s; }
+        #chat-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.1); }
     </style>
 </head>
 <body>
-    <div id="main-view">
-        <div id="top-process-panel">
-            <div class="process-card" onclick="focusZone('Z_IN')" id="card-Z_IN">
-                <div class="p-icon"><i class="fas fa-dolly"></i></div>
-                <div class="p-title">입고(Inbound)</div>
-                <div class="p-count" id="count-Z_IN">0</div>
-            </div>
-            <i class="fas fa-arrow-right arrow-divider"></i>
-            <div class="process-card" onclick="focusZone('Z_SORT')" id="card-Z_SORT">
-                <div class="p-icon"><i class="fas fa-boxes"></i></div>
-                <div class="p-title">분류(Sorting)</div>
-                <div class="p-count" id="count-Z_SORT">0</div>
-            </div>
-            <i class="fas fa-arrow-right arrow-divider"></i>
-            <div class="process-card" onclick="focusZone('Z_OUT')" id="card-Z_OUT">
-                <div class="p-icon"><i class="fas fa-truck-loading"></i></div>
-                <div class="p-title">출고(Outbound)</div>
-                <div class="p-count" id="count-Z_OUT">0</div>
-            </div>
-        </div>
 
-        <div id="bottom-graph-panel">
-            <div id="graph-container"></div>
-            <div class="graph-label"><i class="fas fa-project-diagram"></i> 실시간 온톨로지 (Live Ontology)</div>
+<div id="main-container">
+    <div id="status-panel">
+        <div class="card" id="card-Z_IN" onclick="focusNode('Z_IN')">
+            <div class="card-icon"><i class="fas fa-dolly"></i></div>
+            <div class="card-title">입고 (Inbound)</div>
+            <div class="card-value" id="val-Z_IN">0</div>
+        </div>
+        <div class="arrow"><i class="fas fa-chevron-right"></i></div>
+        <div class="card" id="card-Z_SORT" onclick="focusNode('Z_SORT')">
+            <div class="card-icon"><i class="fas fa-boxes"></i></div>
+            <div class="card-title">분류 (Sorting)</div>
+            <div class="card-value" id="val-Z_SORT">0</div>
+        </div>
+        <div class="arrow"><i class="fas fa-chevron-right"></i></div>
+        <div class="card" id="card-Z_OUT" onclick="focusNode('Z_OUT')">
+            <div class="card-icon"><i class="fas fa-truck-loading"></i></div>
+            <div class="card-title">출고 (Outbound)</div>
+            <div class="card-value" id="val-Z_OUT">0</div>
         </div>
     </div>
 
-    <div id="sidebar">
-        <div id="info-panel">
-            <div id="info-title"><i class="fas fa-bullhorn"></i> 시스템 알림</div>
-            <div id="event-list">
-                <div style="color:#B0BEC5; font-size:0.85rem;">현재 발생한 이벤트가 없습니다.</div>
-            </div>
-        </div>
-        
-        <div id="chat-panel">
-            <div id="messages">
-                <div class="msg bot">👋 안녕하세요! 한국물류 관제 AI입니다.<br>물류센터 상태를 모니터링 중입니다. 궁금한 점을 물어보세요!</div>
-            </div>
-            <div id="input-area">
-                <input type="text" id="chat-input" placeholder="예: 현재 장애 상황 알려줘" onkeypress="if(event.key==='Enter') sendMessage()">
-            </div>
+    <div id="graph-panel">
+        <div id="network"></div>
+        <div class="graph-badge"><i class="fas fa-project-diagram"></i> 실시간 온톨로지 뷰</div>
+    </div>
+</div>
+
+<div id="sidebar">
+    <div id="log-section">
+        <div id="log-title"><i class="fas fa-history"></i> 실시간 알림</div>
+        <div id="log-list">
+            <div style="color:#aaa; text-align:center; padding:20px;">시스템 정상 가동 중</div>
         </div>
     </div>
+    
+    <div id="chat-section">
+        <div id="chat-messages">
+            <div class="msg bot">👋 안녕하세요! 물류 관제 AI입니다.<br>시스템 상태나 장애 원인을 물어보세요.</div>
+        </div>
+        <div id="chat-input-area">
+            <input type="text" id="chat-input" placeholder="질문을 입력하세요..." onkeypress="if(event.key==='Enter') sendChat()">
+        </div>
+    </div>
+</div>
 
-    <script>
-        // 전역 변수
-        let network = null;
-        let nodes = new vis.DataSet([]);
-        let edges = new vis.DataSet([]);
-        
-        // 색상 팔레트
-        const COLORS = {
-            center: '#FF6F00',
-            zone: '#FF9800',
-            agv: '#009688',
-            error: '#D32F2F',
-            search: '#2979FF',
-            default: '#90A4AE'
-        };
+<script>
+    // 1. [초강수] 좌표 직접 지정 데이터 (절대 실패 없음)
+    // 물리 엔진을 끄고 이 좌표대로 그립니다.
+    const staticNodes = [
+        { id: 'DT_HUB', label: '동탄 허브\n(Center)', group: 'Center', x: 0, y: -150 },
+        { id: 'Z_IN',   label: '입고존\n(Inbound)',   group: 'Zone',   x: -250, y: 50 },
+        { id: 'Z_SORT', label: '분류존\n(Sorting)',   group: 'Zone',   x: 0,    y: 50 },
+        { id: 'Z_OUT',  label: '출고존\n(Outbound)',  group: 'Zone',   x: 250,  y: 50 },
+        { id: 'AGV_01', label: 'AGV-01',             group: 'AGV',    x: -150, y: 150 },
+        { id: 'AGV_02', label: 'AGV-02',             group: 'AGV',    x: 150,  y: 150 }
+    ];
 
-        // 1. 온톨로지 초기화 (구조 로드)
-        async function initGraph() {
-            try {
-                const res = await fetch('/api/ontology-structure');
-                const data = await res.json();
-                
-                // 노드 데이터 가공
-                const visNodes = data.nodes.map(n => ({
-                    id: n.id,
-                    label: n.label,
-                    group: n.group,
-                    shape: n.group === 'Center' ? 'hexagon' : (n.group === 'Zone' ? 'box' : 'dot'),
-                    color: n.group === 'Center' ? COLORS.center : (n.group === 'Zone' ? COLORS.zone : COLORS.agv),
-                    font: { color: n.group === 'Center' ? 'white' : 'black', size: 16 },
-                    margin: 12,
-                    borderWidth: 2,
-                    shadow: true
-                }));
+    const staticEdges = [
+        { from: 'DT_HUB', to: 'Z_IN', arrows: 'to' },
+        { from: 'DT_HUB', to: 'Z_SORT', arrows: 'to' },
+        { from: 'DT_HUB', to: 'Z_OUT', arrows: 'to' },
+        { from: 'Z_IN',   to: 'Z_SORT', arrows: 'to', label: 'NEXT' },
+        { from: 'Z_SORT', to: 'Z_OUT', arrows: 'to', label: 'NEXT' },
+        { from: 'AGV_01', to: 'Z_IN', dashes: true },
+        { from: 'AGV_02', to: 'Z_SORT', dashes: true }
+    ];
 
-                // 엣지 데이터 가공
-                const visEdges = data.edges.map(e => ({
-                    ...e, 
-                    arrows: 'to', 
-                    color: { color: '#CFD8DC' }, 
-                    width: 2 
-                }));
+    // 색상 설정
+    const COLORS = {
+        Center: '#FF6F00', Zone: '#455A64', AGV: '#00897B', 
+        Error: '#D32F2F', Highlight: '#2979FF', Default: '#90A4AE'
+    };
 
-                nodes.add(visNodes);
-                edges.add(visEdges);
+    // Vis.js 초기화
+    const nodes = new vis.DataSet(staticNodes.map(n => ({
+        ...n,
+        shape: n.group === 'Center' ? 'hexagon' : (n.group === 'Zone' ? 'box' : 'dot'),
+        color: { background: n.group === 'Center' ? COLORS.Center : COLORS.Zone, border: 'white' },
+        font: { color: n.group === 'Center' ? 'white' : 'white' },
+        size: 30,
+        margin: 15,
+        shadow: true
+    })));
+    
+    const edges = new vis.DataSet(staticEdges.map(e => ({
+        ...e, color: { color: '#B0BEC5' }, width: 2
+    })));
 
-                const container = document.getElementById('graph-container');
-                
-                // [핵심] 레이아웃 설정 개선
-                const options = {
-                    layout: {
-                        hierarchical: {
-                            enabled: true,
-                            direction: 'UD', // 위->아래
-                            sortMethod: 'directed',
-                            levelSeparation: 150, // 층 간격 넓힘
-                            nodeSpacing: 250,     // 노드 좌우 간격 넓힘 (겹침 방지)
-                            treeSpacing: 250
-                        }
-                    },
-                    physics: {
-                        enabled: true,
-                        hierarchicalRepulsion: {
-                            nodeDistance: 250,
-                            springLength: 150,
-                        },
-                        // [중요] 초기 안정화 후 물리 엔진 정지 (깔끔한 배치 후 고정)
-                        stabilization: {
-                            enabled: true,
-                            iterations: 200, // 충분히 계산
-                            updateInterval: 25,
-                            onlyDynamicEdges: false,
-                            fit: true
-                        }
-                    },
-                    interaction: {
-                        dragNodes: false, // 사용자 드래그 방지 (위치 고정)
-                        zoomView: true,
-                        dragView: true
-                    }
-                };
+    const container = document.getElementById('network');
+    const network = new vis.Network(container, { nodes, edges }, {
+        physics: false, // [중요] 물리 엔진 끄기 -> 절대 움직이지 않음
+        interaction: { dragNodes: false, zoomView: true, dragView: true }
+    });
+    
+    // 초기 카메라 맞춤
+    network.fit();
 
-                network = new vis.Network(container, { nodes, edges }, options);
+    // 2. 데이터 업데이트 루프 (2초 간격)
+    async function updateData() {
+        try {
+            const res = await fetch('/api/system-status');
+            const data = await res.json();
 
-                // 안정화가 끝나면 물리 엔진 끄기 (흔들림 방지)
-                network.on("stabilizationIterationsDone", function () {
-                    network.setOptions({ physics: { enabled: false } });
-                    console.log("Layout stabilized and frozen.");
-                });
-
-            } catch (e) {
-                console.error("Graph init failed:", e);
+            // (1) 카드 숫자 업데이트
+            for(const [id, count] of Object.entries(data.counts)) {
+                const el = document.getElementById(`val-${id}`);
+                if(el) el.innerText = count;
             }
-        }
 
-        // 2. 주기적 상태 업데이트 (2초마다)
-        async function updateStatus() {
-            try {
-                const res = await fetch('/api/system-status');
-                const status = await res.json();
+            // (2) 로그 업데이트
+            const logDiv = document.getElementById('log-list');
+            if(data.events.length > 0) {
+                logDiv.innerHTML = data.events.map(e => 
+                    `<div class="log-item ${e.type}"><b>${e.type==='ERROR'?'⚠ 장애 발생':'✨ 프로모션'}</b><br>${e.desc}</div>`
+                ).join('');
+            } else {
+                logDiv.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px;">시스템 정상 가동 중</div>';
+            }
 
-                // (1) 상단 카드 카운트 업데이트
-                for (const [zoneId, count] of Object.entries(status.counts)) {
-                    const el = document.getElementById(`count-${zoneId}`);
-                    if (el) el.innerText = count;
-                }
+            // (3) 그래프 색상 반영 (장애 시 빨간색)
+            const allNodes = nodes.get();
+            const updates = [];
+            
+            allNodes.forEach(n => {
+                let baseColor = (n.group === 'Center') ? COLORS.Center : COLORS.Zone;
+                if(n.group === 'AGV') baseColor = COLORS.AGV;
 
-                // (2) 알림창 업데이트
-                const logDiv = document.getElementById('event-list');
-                if (status.active_events.length > 0) {
-                    logDiv.innerHTML = status.active_events.map(desc => 
-                        `<div class="event-item ERROR"><i class="fas fa-exclamation-triangle"></i> ${desc}</div>`
-                    ).join('');
+                // 장애가 발생한 구역(data.error_nodes)은 빨간색으로
+                if(data.error_nodes.includes(n.id)) {
+                    updates.push({ id: n.id, color: { background: COLORS.Error } });
                 } else {
-                    logDiv.innerHTML = '<div style="color:#B0BEC5; font-size:0.85rem; padding:10px;">현재 시스템이 정상 가동 중입니다.</div>';
-                }
-
-                // (3) 그래프 색상 업데이트 (에러 시 빨강)
-                const allNodes = nodes.get();
-                const updates = [];
-                
-                allNodes.forEach(node => {
-                    let targetColor = COLORS.default;
-                    if (node.group === 'Center') targetColor = COLORS.center;
-                    else if (node.group === 'Zone') targetColor = COLORS.zone;
-                    else if (node.group === 'AGV') targetColor = COLORS.agv;
-
-                    // 에러 발생 시
-                    if (status.error_nodes.includes(node.id)) {
-                        targetColor = COLORS.error;
+                    // 원래 색 복구 (하이라이트 중이 아닐 때만)
+                    if(n.color.background !== COLORS.Highlight && n.color.background !== baseColor) {
+                        updates.push({ id: n.id, color: { background: baseColor } });
                     }
-
-                    // 색상이 다를 때만 업데이트
-                    if (node.color !== targetColor) {
-                        updates.push({ id: node.id, color: targetColor });
-                    }
-                });
-
-                if (updates.length > 0) nodes.update(updates);
-
-            } catch (e) { console.error("Update failed:", e); }
-        }
-
-        // 3. 채팅 전송
-        async function sendMessage() {
-            const input = document.getElementById('chat-input');
-            const text = input.value.trim();
-            if (!text) return;
-
-            // 사용자 메시지 표시
-            addMessage(text, 'user');
-            input.value = '';
-
-            // 로딩 표시
-            const loadingId = addMessage('분석 중입니다...', 'bot', true);
-
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: text })
-                });
-                const data = await res.json();
-
-                // 로딩 메시지 제거 후 응답 표시
-                removeMessage(loadingId);
-                addMessage(data.reply, 'bot');
-
-                // 관련 노드 줌인 효과
-                if (data.related_nodes && data.related_nodes.length > 0) {
-                    focusNodes(data.related_nodes);
                 }
+            });
+            if(updates.length > 0) nodes.update(updates);
 
-            } catch (e) {
-                removeMessage(loadingId);
-                addMessage("오류가 발생했습니다. 잠시 후 다시 시도해주세요.", 'bot');
-                console.error(e);
+        } catch(e) { console.error("Update Fail:", e); }
+    }
+    
+    setInterval(updateData, 2000);
+
+    // 3. UI 인터랙션 (카드 클릭 & 채팅)
+    window.focusNode = function(id) {
+        // 카드 스타일
+        document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
+        const card = document.getElementById(`card-${id}`);
+        if(card) card.classList.add('active');
+
+        // 그래프 줌 & 하이라이트
+        network.fit({ nodes: [id], animation: true });
+        
+        // 깜빡임 효과
+        const originalColor = nodes.get(id).color;
+        nodes.update({ id: id, color: { background: COLORS.Highlight } });
+        setTimeout(() => nodes.update({ id: id, color: originalColor }), 1500);
+    }
+
+    async function sendChat() {
+        const input = document.getElementById('chat-input');
+        const text = input.value.trim();
+        if(!text) return;
+
+        addMsg(text, 'user');
+        input.value = '';
+
+        const loadId = addMsg('분석 중...', 'bot', true);
+
+        try {
+            const res = await fetch('/api/chat', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ message: text })
+            });
+            const data = await res.json();
+            
+            removeMsg(loadId);
+            addMsg(data.reply, 'bot');
+
+            if(data.related_nodes && data.related_nodes.length > 0) {
+                focusNode(data.related_nodes[0]); // 첫 번째 관련 노드로 이동
             }
+        } catch(e) {
+            removeMsg(loadId);
+            addMsg("오류가 발생했습니다.", 'bot');
         }
+    }
 
-        // 유틸: 메시지 추가
-        function addMessage(text, type, isLoading = false) {
-            const div = document.createElement('div');
-            div.className = `msg ${type}`;
-            div.innerHTML = isLoading ? `<i class="fas fa-spinner fa-spin"></i> ${text}` : text;
-            const id = 'msg-' + Date.now();
-            div.id = id;
-            
-            const container = document.getElementById('messages');
-            container.appendChild(div);
-            container.scrollTop = container.scrollHeight;
-            return id;
-        }
-
-        function removeMessage(id) {
-            const el = document.getElementById(id);
-            if (el) el.remove();
-        }
-
-        // 유틸: 노드 줌인 및 하이라이트
-        function focusNodes(nodeIds) {
-            if (!network) return;
-            
-            // 1. 카메라 이동
-            network.fit({ nodes: nodeIds, animation: true });
-
-            // 2. 파란색 하이라이트
-            const originalColors = nodeIds.map(id => ({ id: id, color: nodes.get(id).color }));
-            const highlightUpdates = nodeIds.map(id => ({ id: id, color: COLORS.search }));
-            
-            nodes.update(highlightUpdates);
-
-            // 1.5초 후 복구
-            setTimeout(() => {
-                nodes.update(originalColors);
-                network.fit({ animation: { duration: 1000, easingFunction: 'easeInOutQuad' } }); // 전체 화면 복귀
-            }, 1500);
-        }
-
-        // 카드 클릭 시 해당 구역 줌인
-        window.focusZone = function(zoneId) {
-            // 카드 활성화 스타일
-            document.querySelectorAll('.process-card').forEach(c => c.classList.remove('active'));
-            const card = document.getElementById(`card-${zoneId}`);
-            if(card) card.classList.add('active');
-            
-            focusNodes([zoneId]);
-        }
-
-        // 실행
-        initGraph();
-        setInterval(updateStatus, 2000);
-
-    </script>
+    function addMsg(text, type, isTemp=false) {
+        const div = document.createElement('div');
+        div.className = `msg ${type}`;
+        div.innerHTML = text;
+        div.id = isTemp ? 'temp-msg' : '';
+        const box = document.getElementById('chat-messages');
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+        return div.id;
+    }
+    function removeMsg(id) {
+        const el = document.getElementById(id);
+        if(el) el.remove();
+    }
+</script>
 </body>
 </html>
