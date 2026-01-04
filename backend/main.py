@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import asyncio
 from contextlib import asynccontextmanager
+from fastapi.responses import RedirectResponse
 
 from .database import db
 from .simulator import simulator
@@ -69,5 +70,6 @@ async def get_graph_data():
     return {"nodes": node_list, "edges": edges}
 
 @app.get("/")
-def read_root():
-    return {"message": "Logistics AI Agent Running. Go to /ui/index.html"}
+async def read_root():
+    # 접속하자마자 UI 페이지로 강제 이동시킵니다.
+    return RedirectResponse(url="/ui/index.html")
