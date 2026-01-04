@@ -2,177 +2,212 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Korea Logistics AI</title>
+    <title>Korea Logistics Ontology View</title>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root { --primary: #FF6F00; --bg-body: #F5F7FA; --bg-card: #FFFFFF; --text-main: #263238; --border: #ECEFF1; }
-        body { margin: 0; height: 100vh; display: flex; font-family: 'Pretendard', sans-serif; background: var(--bg-body); color: var(--text-main); }
+        body { margin: 0; padding: 0; font-family: 'Pretendard', sans-serif; display: flex; height: 100vh; overflow: hidden; }
         
-        #main-view { flex: 7; display: flex; flex-direction: column; border-right: 1px solid var(--border); }
-        #top-process-panel { flex: 3; background: var(--bg-card); padding: 20px; display: flex; justify-content: center; gap: 30px; border-bottom: 1px solid var(--border); align-items: center; }
+        /* 왼쪽: 온톨로지 뷰 */
+        #graph-panel { flex: 7; position: relative; background: #F8F9FA; border-right: 1px solid #ddd; }
+        #network { width: 100%; height: 100%; }
         
-        .process-card { background: white; border: 2px solid var(--border); border-radius: 12px; width: 160px; padding: 20px; text-align: center; cursor: pointer; transition: 0.2s; }
-        .process-card.active { border-color: var(--primary); background: #FFF8E1; }
-        .p-count { font-size: 2rem; font-weight: 800; margin: 10px 0; }
+        /* 상태 오버레이 (물동량 표시) */
+        .status-overlay { position: absolute; top: 20px; left: 20px; background: rgba(255,255,255,0.9); padding: 15px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); pointer-events: none; }
+        .status-item { margin: 5px 0; font-size: 14px; font-weight: bold; color: #333; }
         
-        #bottom-graph-panel { flex: 7; position: relative; background: #FAFAFA; }
-        /* 높이 100% 필수 */
-        #graph-container { width: 100%; height: 100%; }
+        /* 오른쪽: 채팅 및 로그 */
+        #side-panel { flex: 3; display: flex; flex-direction: column; background: white; }
+        #log-box { flex: 4; padding: 20px; overflow-y: auto; border-bottom: 1px solid #eee; background: #FFF3E0; }
+        #chat-box { flex: 6; display: flex; flex-direction: column; padding: 20px; }
+        #messages { flex: 1; overflow-y: auto; margin-bottom: 10px; border: 1px solid #eee; border-radius: 8px; padding: 10px; background: #fafafa; }
+        .msg { padding: 8px 12px; margin: 5px 0; border-radius: 15px; font-size: 14px; max-width: 80%; }
+        .bot { background: #E3F2FD; align-self: flex-start; color: #1565C0; }
+        .user { background: #FF6F00; align-self: flex-end; color: white; margin-left: auto; }
+        #input-area { display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 20px; outline: none; }
         
-        #sidebar { flex: 3; display: flex; flex-direction: column; background: var(--bg-card); }
-        #info-panel { flex: 4; padding: 20px; border-bottom: 1px solid var(--border); overflow-y: auto; }
-        #chat-panel { flex: 6; padding: 20px; background: #F5F7FA; display: flex; flex-direction: column; }
-        #messages { flex: 1; overflow-y: auto; padding: 10px; }
-        .msg { padding: 10px 14px; margin: 5px 0; border-radius: 10px; max-width: 85%; font-size: 0.9rem;}
-        .user { background: var(--primary); color: white; align-self: flex-end; }
-        .bot { background: white; border: 1px solid #CFD8DC; align-self: flex-start; }
-        #chat-input { width: 100%; padding: 12px; border: 1px solid #CFD8DC; border-radius: 20px; }
-        
-        .event-item { background: white; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #ccc; font-size: 0.9rem; }
-        .event-item.ERROR { border-left-color: #D32F2F; background: #FFEBEE; }
-        .event-item.PROMO { border-left-color: #7B1FA2; background: #F3E5F5; }
+        /* 알림 배지 */
+        .badge-error { color: red; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0.5; } }
     </style>
 </head>
 <body>
-    <div id="main-view">
-        <div id="top-process-panel">
-            <div class="process-card" onclick="selectZone('Z_IN')" id="card-Z_IN">
-                <i class="fas fa-dolly" style="color:var(--primary); font-size:1.5rem;"></i>
-                <div style="font-weight:bold; margin-top:5px;">입고(Inbound)</div>
-                <div class="p-count" id="count-Z_IN">0</div>
-            </div>
-            <i class="fas fa-arrow-right" style="color:#CFD8DC; font-size:1.2rem;"></i>
-            <div class="process-card" onclick="selectZone('Z_SORT')" id="card-Z_SORT">
-                <i class="fas fa-boxes" style="color:var(--primary); font-size:1.5rem;"></i>
-                <div style="font-weight:bold; margin-top:5px;">분류(Sorting)</div>
-                <div class="p-count" id="count-Z_SORT">0</div>
-            </div>
-            <i class="fas fa-arrow-right" style="color:#CFD8DC; font-size:1.2rem;"></i>
-            <div class="process-card" onclick="selectZone('Z_OUT')" id="card-Z_OUT">
-                <i class="fas fa-truck-loading" style="color:var(--primary); font-size:1.5rem;"></i>
-                <div style="font-weight:bold; margin-top:5px;">출고(Outbound)</div>
-                <div class="p-count" id="count-Z_OUT">0</div>
-            </div>
-        </div>
-        <div id="bottom-graph-panel">
-            <div id="graph-container"></div>
-            <div style="position:absolute; top:10px; left:10px; background:white; padding:5px 10px; border-radius:15px; border:1px solid #ECEFF1; font-size:0.8rem; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">
-                🕸️ Ontology View (Auto Layout)
-            </div>
+
+    <div id="graph-panel">
+        <div id="network"></div>
+        <div class="status-overlay" id="overlay">
+            <div class="status-item">📦 입고(Inbound): <span id="val-Z_IN">0</span></div>
+            <div class="status-item">🏗️ 분류(Sorting): <span id="val-Z_SORT">0</span></div>
+            <div class="status-item">🚚 출고(Outbound): <span id="val-Z_OUT">0</span></div>
         </div>
     </div>
-    <div id="sidebar">
-        <div id="info-panel">
-            <div style="font-weight:bold; color:var(--primary); margin-bottom:10px;">📊 운영 현황</div>
-            <div id="event-list"></div>
+
+    <div id="side-panel">
+        <div id="log-box">
+            <h3 style="margin-top:0; color:#FF6F00;">📢 시스템 알림</h3>
+            <div id="event-logs"></div>
         </div>
-        <div id="chat-panel">
-            <div id="messages"><div class="msg bot">한국물류 AI입니다. 🇰🇷</div></div>
-            <div style="margin-top:10px;"><input type="text" id="chat-input" placeholder="질문 입력..." onkeypress="if(event.key==='Enter') send()"></div>
+        <div id="chat-box">
+            <div id="messages">
+                <div class="msg bot">안녕하세요! 한국물류 관제 AI입니다.<br>검색하시면 해당 위치로 이동합니다.</div>
+            </div>
+            <div id="input-area">
+                <input type="text" id="chat-input" placeholder="예: 입고존 상태 알려줘" onkeypress="if(event.key==='Enter') send()">
+            </div>
         </div>
     </div>
 
     <script>
+        // Vis.js 데이터셋
         const nodes = new vis.DataSet([]);
         const edges = new vis.DataSet([]);
-        const container = document.getElementById('graph-container');
-        
-        // [설정] 계층형 레이아웃 + 물리 엔진 최적화
-        const network = new vis.Network(container, { nodes, edges }, {
-            nodes: { shape: 'dot', size: 20, font: { size: 14, color: '#37474F' }, borderWidth: 2, shadow: true },
-            edges: { width: 2, smooth: { type: 'cubicBezier' } },
-            layout: {
-                hierarchical: {
-                    enabled: true,
-                    direction: 'UD', // Up-Down
-                    sortMethod: 'directed',
-                    levelSeparation: 120, // 층 간격
-                    nodeSpacing: 150      // 노드 간격
-                }
-            },
-            physics: {
-                enabled: true, // 초기 자리잡기를 위해 True
-                hierarchicalRepulsion: {
-                    nodeDistance: 150,
-                    springLength: 100,
-                    damping: 0.09
-                },
-                stabilization: {
-                    iterations: 100 // 100번 계산 후 멈춤 (성능 최적화)
-                }
-            }
-        });
+        let network = null;
 
-        let isFirstLoad = true;
+        // 색상 상수
+        const COLOR_DEFAULT = '#90A4AE'; // 회색 (기본)
+        const COLOR_CENTER = '#FF6F00';  // 센터 (오렌지)
+        const COLOR_ERROR = '#D32F2F';   // 장애 (빨강)
+        const COLOR_SEARCH = '#2962FF';  // 검색 (파랑)
 
-        async function updateData() {
-            try {
-                // 1. 통계 & 이벤트
-                const dRes = await fetch('/api/dashboard-stats');
-                const stats = await dRes.json();
-                
-                ['Z_IN', 'Z_SORT', 'Z_OUT'].forEach(id => {
-                    const z = stats.zones.find(z => z.id === id);
-                    if(z) document.getElementById(`count-${id}`).innerText = z.count;
-                });
-                
-                const evtDiv = document.getElementById('event-list');
-                evtDiv.innerHTML = '';
-                stats.events.forEach(e => {
-                    evtDiv.innerHTML += `<div class="event-item ${e.type}"><b>${e.type==='ERROR'?'⚠ 장애':'✨ 프로모션'}</b><br>${e.desc}</div>`;
-                });
+        // 1. [초기화] 온톨로지 구조 로드 (한 번만 실행)
+        async function initOntology() {
+            const res = await fetch('/api/ontology-structure');
+            const data = await res.json();
 
-                // 2. 그래프 데이터
-                const gRes = await fetch('/api/graph-data');
-                const gData = await gRes.json();
-                
-                if (gData.nodes.length > 0) {
-                    nodes.update(gData.nodes);
-                    edges.update(gData.edges);
-                    
-                    // [핵심 해결책] 처음 로딩시 카메라를 노드들에 맞춤
-                    if(isFirstLoad) {
-                        network.fit({ animation: true });
-                        isFirstLoad = false;
+            const visNodes = data.nodes.map(n => ({
+                id: n.id,
+                label: n.label,
+                group: n.group,
+                color: n.group === 'Center' ? COLOR_CENTER : COLOR_DEFAULT,
+                shape: n.group === 'Center' ? 'hexagon' : 'box',
+                font: { color: 'white' },
+                margin: 10
+            }));
+
+            const visEdges = data.edges.map(e => ({
+                ...e, color: { color: '#CFD8DC' }, arrows: 'to'
+            }));
+
+            nodes.add(visNodes);
+            edges.add(visEdges);
+
+            const container = document.getElementById('network');
+            network = new vis.Network(container, { nodes, edges }, {
+                layout: {
+                    hierarchical: {
+                        enabled: true,
+                        direction: 'UD', // 위에서 아래로
+                        sortMethod: 'directed',
+                        levelSeparation: 150,
+                        nodeSpacing: 200
                     }
+                },
+                physics: false, // [중요] 물리 엔진 꺼서 흔들림 방지
+                interaction: { dragNodes: false, zoomView: true } // 노드 드래그 막음 (고정)
+            });
+            
+            // 로딩 후 중앙 정렬
+            setTimeout(() => network.fit(), 500);
+        }
+
+        // 2. [주기적 실행] 상태 업데이트 (색상 & 텍스트만 변경)
+        async function updateStatus() {
+            try {
+                const res = await fetch('/api/system-status');
+                const status = await res.json();
+
+                // (1) 물동량 텍스트 업데이트
+                for (const [zoneId, count] of Object.entries(status.counts)) {
+                    const el = document.getElementById(`val-${zoneId}`);
+                    if (el) el.innerText = count;
                 }
-            } catch(e) { console.error(e); }
-        }
-        
-        // 2초마다 갱신
-        setInterval(updateData, 2000);
-        // 초기 실행
-        updateData();
 
-        window.selectZone = function(id) {
-            document.querySelectorAll('.process-card').forEach(c => c.classList.remove('active'));
-            document.getElementById(`card-${id}`).classList.add('active');
-            network.selectNodes([id]);
-            network.focus(id, { scale: 1.2, animation: true }); // 선택 시 해당 구역 줌인
+                // (2) 로그창 업데이트
+                const logDiv = document.getElementById('event-logs');
+                if (status.active_events.length > 0) {
+                    logDiv.innerHTML = status.active_events.map(e => `<div class="badge-error">⚠ ${e}</div>`).join('');
+                } else {
+                    logDiv.innerHTML = '<div style="color:#aaa;">현재 특이사항 없음</div>';
+                }
+
+                // (3) 노드 색상 변경 (에러 시 빨강, 아니면 원래 색 복구)
+                const allNodes = nodes.get();
+                const updates = [];
+
+                allNodes.forEach(node => {
+                    // 기본 색상 결정
+                    let newColor = (node.group === 'Center') ? COLOR_CENTER : COLOR_DEFAULT;
+
+                    // 에러 상태면 빨강으로 덮어쓰기
+                    if (status.error_nodes.includes(node.id)) {
+                        newColor = COLOR_ERROR;
+                    }
+                    
+                    // 현재 색상과 다를 때만 업데이트 (깜빡임 방지)
+                    if (node.color !== newColor) {
+                        updates.push({ id: node.id, color: newColor });
+                    }
+                });
+
+                if (updates.length > 0) nodes.update(updates);
+
+            } catch (e) { console.error(e); }
         }
 
+        // 3. [채팅 & 검색] 검색 시 해당 노드 줌인 + 파란색 하이라이트
         async function send() {
             const input = document.getElementById('chat-input');
             const text = input.value;
-            if(!text) return;
-            
-            const div = document.createElement('div'); div.className='msg user'; div.innerText=text;
-            document.getElementById('messages').appendChild(div);
-            input.value='';
-            
-            const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text})});
-            const data = await res.json();
-            
-            const botDiv = document.createElement('div'); botDiv.className='msg bot'; botDiv.innerHTML=data.reply;
-            document.getElementById('messages').appendChild(botDiv);
+            if (!text) return;
 
-            if(data.related_nodes && data.related_nodes.length > 0) {
-                network.selectNodes(data.related_nodes);
-                // AI가 찾은 노드로 줌인
-                network.fit({ nodes: data.related_nodes, animation: true });
+            // UI 메시지 추가
+            addMsg(text, 'user');
+            input.value = '';
+
+            const res = await fetch('/api/chat', { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ message: text }) 
+            });
+            const data = await res.json();
+
+            addMsg(data.reply, 'bot');
+
+            // [검색 효과] 관련 노드가 있으면 줌인 & 색상 변경
+            if (data.related_nodes && data.related_nodes.length > 0) {
+                const targetIds = data.related_nodes;
+                
+                // 1. 카메라 이동
+                network.fit({ nodes: targetIds, animation: true });
+
+                // 2. 잠시 파란색으로 하이라이트 후 복구
+                const originalColors = targetIds.map(id => ({ id: id, color: nodes.get(id).color }));
+                const highlightUpdates = targetIds.map(id => ({ id: id, color: COLOR_SEARCH }));
+                
+                nodes.update(highlightUpdates);
+
+                // 2초 뒤 원래 색으로 복구
+                setTimeout(() => {
+                    nodes.update(originalColors);
+                    // 전체 화면으로 다시 줌아웃 (선택사항)
+                    // network.fit({ animation: true }); 
+                }, 2000);
             }
         }
+
+        function addMsg(text, type) {
+            const div = document.createElement('div');
+            div.className = `msg ${type}`;
+            div.innerHTML = text;
+            const container = document.getElementById('messages');
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // 실행
+        initOntology();
+        setInterval(updateStatus, 2000); // 2초마다 상태 체크
+
     </script>
 </body>
 </html>
