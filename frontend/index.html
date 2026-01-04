@@ -6,281 +6,154 @@
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        /* [테마] 한국물류 (Korea Logistics) - Clean Orange & White */
         :root {
-            --primary: #FF6F00; /* 한국물류 메인 컬러 (Deep Orange) */
-            --bg-body: #F5F7FA;
-            --bg-card: #FFFFFF;
-            --text-main: #263238;
-            --text-sub: #78909C;
-            --border: #ECEFF1;
-            --shadow: 0 4px 6px rgba(0,0,0,0.04);
+            --primary: #FF6F00; --bg-body: #F5F7FA; --bg-card: #FFFFFF;
+            --text-main: #263238; --text-sub: #78909C; --border: #ECEFF1;
         }
-
-        body {
-            margin: 0; height: 100vh; display: flex;
-            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, Roboto, sans-serif;
-            background: var(--bg-body); color: var(--text-main);
-        }
-
-        /* 왼쪽: 메인 (상단 프로세스 + 하단 그래프) */
-        #main-view { flex: 7; display: flex; flex-direction: column; height: 100%; border-right: 1px solid var(--border); }
-        
-        /* [상단] 프로세스 뷰 */
-        #top-process-panel {
-            flex: 3; background: var(--bg-card); padding: 20px;
-            display: flex; align-items: center; justify-content: center; gap: 40px;
-            border-bottom: 1px solid var(--border);
-        }
-        
-        .process-card {
-            background: white; border: 2px solid var(--border); border-radius: 12px;
-            width: 180px; padding: 25px 15px; text-align: center;
-            box-shadow: var(--shadow); transition: all 0.2s; cursor: pointer;
-        }
+        body { margin: 0; height: 100vh; display: flex; font-family: 'Pretendard', sans-serif; background: var(--bg-body); color: var(--text-main); }
+        #main-view { flex: 7; display: flex; flex-direction: column; border-right: 1px solid var(--border); }
+        #top-process-panel { flex: 3; background: var(--bg-card); padding: 20px; display: flex; align-items: center; justify-content: center; gap: 40px; border-bottom: 1px solid var(--border); }
+        .process-card { background: white; border: 2px solid var(--border); border-radius: 12px; width: 180px; padding: 25px 15px; text-align: center; cursor: pointer; transition: 0.2s; }
         .process-card:hover { border-color: var(--primary); transform: translateY(-5px); }
         .process-card.active { border-color: var(--primary); background: #FFF8E1; }
+        .p-count { font-size: 2.2rem; font-weight: 800; margin: 10px 0; }
         
-        .p-icon { font-size: 2.2rem; color: var(--primary); margin-bottom: 15px; }
-        .p-title { font-size: 1.1rem; font-weight: bold; color: var(--text-main); margin-bottom: 5px; }
-        .p-count { font-size: 2.2rem; font-weight: 800; color: var(--text-main); }
-        .p-desc { font-size: 0.8rem; color: var(--text-sub); margin-top: 5px; text-transform: uppercase; letter-spacing: 1px;}
-        
-        .arrow { font-size: 1.2rem; color: #CFD8DC; }
-
-        /* [하단] 온톨로지 그래프 */
         #bottom-graph-panel { flex: 7; position: relative; background: #FAFAFA; }
         #graph-container { width: 100%; height: 100%; }
-        .panel-label {
-            position: absolute; top: 20px; left: 25px; z-index: 10;
-            background: white; padding: 8px 16px; border: 1px solid var(--border);
-            border-radius: 20px; font-weight: bold; color: var(--text-main); font-size: 0.9rem;
-            box-shadow: var(--shadow); display: flex; align-items: center; gap: 8px;
-        }
-
-        /* 오른쪽: 사이드바 */
+        
         #sidebar { flex: 3; display: flex; flex-direction: column; background: var(--bg-card); }
-        
-        /* 정보창 */
         #info-panel { flex: 4; padding: 25px; border-bottom: 1px solid var(--border); overflow-y: auto; }
-        .info-header { font-size: 1.2rem; font-weight: bold; margin-bottom: 20px; display: flex; align-items: center; gap: 10px; color: var(--primary); }
-        .event-item {
-            background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; font-size: 0.95rem;
-            border: 1px solid var(--border); border-left: 4px solid var(--primary);
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-        }
-        .event-item.error { border-left-color: #D32F2F; background: #FFEBEE; }
-        
-        /* 채팅창 */
-        #chat-panel { flex: 6; display: flex; flex-direction: column; padding: 20px; background: #F5F7FA; }
+        #chat-panel { flex: 6; padding: 20px; background: #F5F7FA; display: flex; flex-direction: column; }
         #messages { flex: 1; overflow-y: auto; padding: 10px; }
-        .msg { padding: 12px 16px; margin: 8px 0; border-radius: 12px; max-width: 85%; font-size: 0.95rem; line-height: 1.5; }
-        .user { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .bot { background: white; border: 1px solid #CFD8DC; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .msg { padding: 12px 16px; margin: 8px 0; border-radius: 12px; max-width: 85%; }
+        .user { background: var(--primary); color: white; align-self: flex-end; }
+        .bot { background: white; border: 1px solid #CFD8DC; align-self: flex-start; }
+        #chat-input { width: 100%; padding: 14px; border: 1px solid #CFD8DC; border-radius: 25px; outline: none; }
         
-        #input-area { display: flex; gap: 10px; margin-top: 10px;}
-        #chat-input {
-            flex: 1; padding: 14px; border: 1px solid #CFD8DC; border-radius: 25px; outline: none; transition: border 0.2s;
-        }
-        #chat-input:focus { border-color: var(--primary); }
-
-        /* Toast */
-        #toast {
-            position: fixed; top: 30px; left: 50%; transform: translateX(-50%);
-            background: #263238; color: white; padding: 12px 30px;
-            border-radius: 30px; z-index: 1000; opacity: 0; transition: opacity 0.5s; pointer-events: none; font-weight: 500;
-        }
-        #toast.show { opacity: 1; }
+        .event-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .event-item.error { border-left-color: #D32F2F; background: #FFEBEE; }
     </style>
 </head>
 <body>
-    <div id="toast">알림</div>
-
     <div id="main-view">
         <div id="top-process-panel">
             <div class="process-card" onclick="selectZone('Z_IN')" id="card-Z_IN">
-                <div class="p-icon"><i class="fas fa-dolly"></i></div>
-                <div class="p-title">입고(Inbound)</div>
+                <div style="color:var(--primary); font-size:2rem; margin-bottom:10px;"><i class="fas fa-dolly"></i></div>
+                <div style="font-weight:bold;">입고(Inbound)</div>
                 <div class="p-count" id="count-Z_IN">0</div>
-                <div class="p-desc">Waiting</div>
             </div>
-            
-            <div class="arrow"><i class="fas fa-arrow-right"></i></div>
-            
+            <div style="font-size:1.5rem; color:#CFD8DC;"><i class="fas fa-arrow-right"></i></div>
             <div class="process-card" onclick="selectZone('Z_SORT')" id="card-Z_SORT">
-                <div class="p-icon"><i class="fas fa-boxes"></i></div>
-                <div class="p-title">분류(Sorting)</div>
+                <div style="color:var(--primary); font-size:2rem; margin-bottom:10px;"><i class="fas fa-boxes"></i></div>
+                <div style="font-weight:bold;">분류(Sorting)</div>
                 <div class="p-count" id="count-Z_SORT">0</div>
-                <div class="p-desc">Processing</div>
             </div>
-
-            <div class="arrow"><i class="fas fa-arrow-right"></i></div>
-
+            <div style="font-size:1.5rem; color:#CFD8DC;"><i class="fas fa-arrow-right"></i></div>
             <div class="process-card" onclick="selectZone('Z_OUT')" id="card-Z_OUT">
-                <div class="p-icon"><i class="fas fa-truck-loading"></i></div>
-                <div class="p-title">출고(Outbound)</div>
+                <div style="color:var(--primary); font-size:2rem; margin-bottom:10px;"><i class="fas fa-truck-loading"></i></div>
+                <div style="font-weight:bold;">출고(Outbound)</div>
                 <div class="p-count" id="count-Z_OUT">0</div>
-                <div class="p-desc">Shipping</div>
             </div>
         </div>
-
         <div id="bottom-graph-panel">
-            <div class="panel-label"><i class="fas fa-project-diagram" style="color:var(--primary)"></i> Korea Logistics Ontology</div>
             <div id="graph-container"></div>
+            <div style="position:absolute; top:20px; left:20px; background:white; padding:8px 16px; border-radius:20px; border:1px solid #ECEFF1; font-weight:bold;">
+                <i class="fas fa-project-diagram" style="color:var(--primary)"></i> Ontology View
+            </div>
         </div>
     </div>
-
     <div id="sidebar">
         <div id="info-panel">
-            <div class="info-header"><i class="fas fa-chart-line"></i> 운영 현황 (Status)</div>
-            <div id="info-content" style="color:#78909C; line-height: 1.6;">
-                구역을 클릭하여<br>상세 온톨로지 정보를 확인하세요.
+            <div style="font-size:1.2rem; font-weight:bold; color:var(--primary); margin-bottom:20px;">
+                <i class="fas fa-chart-line"></i> 운영 현황
             </div>
-            
-            <div style="margin-top:30px; font-weight:bold; margin-bottom:15px; color:#37474F;">🔔 실시간 이벤트 로그</div>
+            <div id="info-content" style="color:#78909C;">구역을 클릭하여 상세 정보를 확인하세요.</div>
+            <div style="margin-top:30px; font-weight:bold; margin-bottom:15px; color:#37474F;">🔔 실시간 이벤트</div>
             <div id="event-list"></div>
         </div>
-
         <div id="chat-panel">
-            <div id="messages">
-                <div class="msg bot">반갑습니다. <b>한국물류 AI 관제 시스템</b>입니다. 🇰🇷<br>도움이 필요하신가요?</div>
-            </div>
-            <div id="input-area">
-                <input type="text" id="chat-input" placeholder="질문 입력 (예: '현재 병목 구간은?')..." onkeypress="if(event.key==='Enter') send()">
-            </div>
+            <div id="messages"><div class="msg bot">한국물류 AI 관제 시스템입니다. 🇰🇷</div></div>
+            <div style="margin-top:10px;"><input type="text" id="chat-input" placeholder="질문 입력..." onkeypress="if(event.key==='Enter') send()"></div>
         </div>
     </div>
 
     <script>
-        // 1. Vis.js 그래프 설정
+        // [핵심 변경] physics: false로 설정하여 DB에서 온 x, y 좌표를 강제 사용
         const nodes = new vis.DataSet([]);
         const edges = new vis.DataSet([]);
         const container = document.getElementById('graph-container');
         const network = new vis.Network(container, { nodes, edges }, {
-            nodes: { 
-                shape: 'dot', size: 25, 
-                font: { face: 'sans-serif', color: '#455A64', size: 14 },
-                borderWidth: 2, shadow: true
-            },
-            edges: { color: '#B0BEC5', arrows: 'to', width: 2, smooth: {type: 'continuous'} },
-            physics: {
-                enabled: true,
-                solver: 'forceAtlas2Based',
-                stabilization: { enabled: true, iterations: 200 }
-            },
-            interaction: { hover: true, zoomView: true }
+            nodes: { shape: 'dot', size: 25, font: { size: 14, color: '#37474F' }, borderWidth: 2, shadow: true },
+            edges: { color: '#B0BEC5', arrows: 'to', width: 2, smooth: { type: 'continuous' } },
+            physics: { enabled: false }, // 물리 엔진 끄기 (좌표 고정)
+            interaction: { dragNodes: false, zoomView: true, dragView: true } // 노드 드래그 막기 (완전 고정)
         });
 
-        // [중요] 초기화 후 물리엔진 끄기 + 화면 맞춤
-        network.once("stabilizationIterationsDone", () => {
-            network.setOptions({ physics: { enabled: false } });
-            network.fit(); // 그래프를 화면 중앙에 꽉 차게 맞춤
-        });
-
-        // 2. 데이터 업데이트
-        let globalStats = null;
-        let isFirstLoad = true;
+        let isFirst = true;
 
         async function updateData() {
             try {
-                // 상단 통계
+                // 1. 대시보드 통계
                 const dRes = await fetch('/api/dashboard-stats');
-                globalStats = await dRes.json();
-                
-                globalStats.zones.forEach(z => {
+                const stats = await dRes.json();
+                stats.zones.forEach(z => {
                     const el = document.getElementById(`count-${z.id}`);
-                    if (el) el.innerText = z.count;
+                    if(el) el.innerText = z.count;
                 });
-
+                
                 const evtDiv = document.getElementById('event-list');
                 evtDiv.innerHTML = '';
-                globalStats.events.forEach(e => {
+                stats.events.forEach(e => {
                     const isErr = e.type === 'ERROR';
-                    evtDiv.innerHTML += `
-                        <div class="event-item ${isErr ? 'error' : ''}">
-                            <div style="font-weight:bold; margin-bottom:4px; color:${isErr ? '#D32F2F' : '#7B1FA2'}">${isErr ? '⚠ 장애 감지' : '✨ 프로모션'}</div>
-                            ${e.desc}
-                        </div>`;
+                    evtDiv.innerHTML += `<div class="event-item ${isErr?'error':''}"><div style="font-weight:bold; color:${isErr?'#D32F2F':'#7B1FA2'}">${isErr?'⚠ 장애':'✨ 프로모션'}</div>${e.desc}</div>`;
                 });
 
-                // 하단 그래프
+                // 2. 그래프 데이터
                 const gRes = await fetch('/api/graph-data');
                 const gData = await gRes.json();
                 
-                // 기존 노드 유지하며 업데이트
                 if (gData.nodes.length > 0) {
                     nodes.update(gData.nodes);
                     edges.update(gData.edges);
-                    
-                    // 데이터가 처음 로드되었을 때 한 번 더 fit 실행 (확실하게 보이기 위해)
-                    if (isFirstLoad) {
-                        network.fit();
-                        isFirstLoad = false;
+                    if (isFirst) {
+                        network.fit(); // 처음에만 중앙 정렬
+                        isFirst = false;
                     }
                 }
-
-            } catch (e) { console.error(e); }
+            } catch(e) { console.error(e); }
         }
         setInterval(updateData, 2000);
 
-        // 3. UI 인터랙션
-        window.selectZone = function(zoneId) {
+        window.selectZone = function(id) {
             document.querySelectorAll('.process-card').forEach(c => c.classList.remove('active'));
-            document.getElementById(`card-${zoneId}`).classList.add('active');
-
-            const zData = globalStats.zones.find(z => z.id === zoneId);
-            if (zData) {
-                document.getElementById('info-content').innerHTML = `
-                    <div style="font-size:1.4rem; font-weight:bold; color:var(--primary); margin-bottom:10px;">${zData.name}</div>
-                    <div style="font-size:1.1rem; color:#37474F;">📦 현재 물동량: <b>${zData.count}</b> Units</div>
-                    <div style="margin-top:20px; padding:10px; background:#ECEFF1; border-radius:8px;">
-                        <div style="font-size:0.9rem; color:#78909C;">ZONE ID</div>
-                        <div style="font-family:monospace; font-weight:bold;">${zData.id}</div>
-                    </div>
-                `;
-            }
-
-            // 해당 노드로 줌인
-            network.selectNodes([zoneId]);
-            network.focus(zoneId, { animation: true, scale: 1.2 });
+            document.getElementById(`card-${id}`).classList.add('active');
+            
+            // 상세 정보 표시 로직 (간소화)
+            document.getElementById('info-content').innerHTML = `<div style="font-size:1.5rem; font-weight:bold; color:var(--primary)">${id}</div><div>선택된 구역입니다.</div>`;
+            
+            network.selectNodes([id]);
+            network.focus(id, { animation: true, scale: 1.2 });
         }
 
-        // 4. 채팅
         async function send() {
             const input = document.getElementById('chat-input');
             const text = input.value;
-            if (!text) return;
-
-            addMsg(text, 'user');
-            input.value = '';
-
-            const res = await fetch('/api/chat', {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({message: text})
-            });
-            const data = await res.json();
-            addMsg(data.reply, 'bot');
+            if(!text) return;
             
-            if (data.related_nodes && data.related_nodes.length > 0) {
+            const div = document.createElement('div'); div.className='msg user'; div.innerText=text;
+            document.getElementById('messages').appendChild(div);
+            input.value='';
+            
+            const res = await fetch('/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text})});
+            const data = await res.json();
+            
+            const botDiv = document.createElement('div'); botDiv.className='msg bot'; botDiv.innerHTML=data.reply;
+            document.getElementById('messages').appendChild(botDiv);
+
+            if(data.related_nodes && data.related_nodes.length > 0) {
                 network.selectNodes(data.related_nodes);
                 network.fit({ nodes: data.related_nodes, animation: true });
-                showToast("관련 노드가 강조되었습니다.");
             }
-        }
-
-        function addMsg(txt, type) {
-            const div = document.createElement('div');
-            div.className = `msg ${type}`;
-            div.innerHTML = txt; // HTML 태그 허용
-            document.getElementById('messages').appendChild(div);
-            document.getElementById('messages').scrollTop = 99999;
-        }
-
-        function showToast(msg) {
-            const t = document.getElementById('toast');
-            t.innerText = msg;
-            t.classList.add('show');
-            setTimeout(() => t.classList.remove('show'), 3000);
         }
     </script>
 </body>
