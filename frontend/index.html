@@ -6,119 +6,118 @@
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
-        :root {
-            --primary: #FF6F00; --bg-body: #F5F7FA; --bg-card: #FFFFFF;
-            --text-main: #263238; --text-sub: #78909C; --border: #ECEFF1;
-        }
+        :root { --primary: #FF6F00; --bg-body: #F5F7FA; --bg-card: #FFFFFF; --text-main: #263238; --border: #ECEFF1; }
         body { margin: 0; height: 100vh; display: flex; font-family: 'Pretendard', sans-serif; background: var(--bg-body); color: var(--text-main); }
+        
         #main-view { flex: 7; display: flex; flex-direction: column; border-right: 1px solid var(--border); }
-        #top-process-panel { flex: 3; background: var(--bg-card); padding: 20px; display: flex; align-items: center; justify-content: center; gap: 40px; border-bottom: 1px solid var(--border); }
-        .process-card { background: white; border: 2px solid var(--border); border-radius: 12px; width: 180px; padding: 25px 15px; text-align: center; cursor: pointer; transition: 0.2s; }
-        .process-card:hover { border-color: var(--primary); transform: translateY(-5px); }
+        #top-process-panel { flex: 3; background: var(--bg-card); padding: 20px; display: flex; justify-content: center; gap: 30px; border-bottom: 1px solid var(--border); align-items: center; }
+        
+        .process-card { background: white; border: 2px solid var(--border); border-radius: 12px; width: 160px; padding: 20px; text-align: center; cursor: pointer; transition: 0.2s; }
         .process-card.active { border-color: var(--primary); background: #FFF8E1; }
-        .p-count { font-size: 2.2rem; font-weight: 800; margin: 10px 0; }
+        .p-count { font-size: 2rem; font-weight: 800; margin: 10px 0; }
         
         #bottom-graph-panel { flex: 7; position: relative; background: #FAFAFA; }
         #graph-container { width: 100%; height: 100%; }
         
         #sidebar { flex: 3; display: flex; flex-direction: column; background: var(--bg-card); }
-        #info-panel { flex: 4; padding: 25px; border-bottom: 1px solid var(--border); overflow-y: auto; }
+        #info-panel { flex: 4; padding: 20px; border-bottom: 1px solid var(--border); overflow-y: auto; }
         #chat-panel { flex: 6; padding: 20px; background: #F5F7FA; display: flex; flex-direction: column; }
         #messages { flex: 1; overflow-y: auto; padding: 10px; }
-        .msg { padding: 12px 16px; margin: 8px 0; border-radius: 12px; max-width: 85%; }
+        .msg { padding: 10px 14px; margin: 5px 0; border-radius: 10px; max-width: 85%; font-size: 0.9rem;}
         .user { background: var(--primary); color: white; align-self: flex-end; }
         .bot { background: white; border: 1px solid #CFD8DC; align-self: flex-start; }
-        #chat-input { width: 100%; padding: 14px; border: 1px solid #CFD8DC; border-radius: 25px; outline: none; }
+        #chat-input { width: 100%; padding: 12px; border: 1px solid #CFD8DC; border-radius: 20px; }
         
-        .event-item { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--primary); box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
-        .event-item.error { border-left-color: #D32F2F; background: #FFEBEE; }
+        .event-item { background: white; padding: 10px; border-radius: 8px; margin-bottom: 8px; border-left: 4px solid #ccc; font-size: 0.9rem; }
+        .event-item.ERROR { border-left-color: #D32F2F; background: #FFEBEE; }
+        .event-item.PROMO { border-left-color: #7B1FA2; background: #F3E5F5; }
     </style>
 </head>
 <body>
     <div id="main-view">
         <div id="top-process-panel">
             <div class="process-card" onclick="selectZone('Z_IN')" id="card-Z_IN">
-                <div style="color:var(--primary); font-size:2rem; margin-bottom:10px;"><i class="fas fa-dolly"></i></div>
-                <div style="font-weight:bold;">입고(Inbound)</div>
+                <i class="fas fa-dolly" style="color:var(--primary); font-size:1.5rem;"></i>
+                <div style="font-weight:bold; margin-top:5px;">입고(Inbound)</div>
                 <div class="p-count" id="count-Z_IN">0</div>
             </div>
-            <div style="font-size:1.5rem; color:#CFD8DC;"><i class="fas fa-arrow-right"></i></div>
+            <i class="fas fa-arrow-right" style="color:#CFD8DC; font-size:1.2rem;"></i>
             <div class="process-card" onclick="selectZone('Z_SORT')" id="card-Z_SORT">
-                <div style="color:var(--primary); font-size:2rem; margin-bottom:10px;"><i class="fas fa-boxes"></i></div>
-                <div style="font-weight:bold;">분류(Sorting)</div>
+                <i class="fas fa-boxes" style="color:var(--primary); font-size:1.5rem;"></i>
+                <div style="font-weight:bold; margin-top:5px;">분류(Sorting)</div>
                 <div class="p-count" id="count-Z_SORT">0</div>
             </div>
-            <div style="font-size:1.5rem; color:#CFD8DC;"><i class="fas fa-arrow-right"></i></div>
+            <i class="fas fa-arrow-right" style="color:#CFD8DC; font-size:1.2rem;"></i>
             <div class="process-card" onclick="selectZone('Z_OUT')" id="card-Z_OUT">
-                <div style="color:var(--primary); font-size:2rem; margin-bottom:10px;"><i class="fas fa-truck-loading"></i></div>
-                <div style="font-weight:bold;">출고(Outbound)</div>
+                <i class="fas fa-truck-loading" style="color:var(--primary); font-size:1.5rem;"></i>
+                <div style="font-weight:bold; margin-top:5px;">출고(Outbound)</div>
                 <div class="p-count" id="count-Z_OUT">0</div>
             </div>
         </div>
         <div id="bottom-graph-panel">
             <div id="graph-container"></div>
-            <div style="position:absolute; top:20px; left:20px; background:white; padding:8px 16px; border-radius:20px; border:1px solid #ECEFF1; font-weight:bold;">
-                <i class="fas fa-project-diagram" style="color:var(--primary)"></i> Ontology View
+            <div style="position:absolute; top:10px; left:10px; background:white; padding:5px 10px; border-radius:15px; border:1px solid #ECEFF1; font-size:0.8rem; font-weight:bold;">
+                🕸️ Ontology View (Auto Layout)
             </div>
         </div>
     </div>
     <div id="sidebar">
         <div id="info-panel">
-            <div style="font-size:1.2rem; font-weight:bold; color:var(--primary); margin-bottom:20px;">
-                <i class="fas fa-chart-line"></i> 운영 현황
-            </div>
-            <div id="info-content" style="color:#78909C;">구역을 클릭하여 상세 정보를 확인하세요.</div>
-            <div style="margin-top:30px; font-weight:bold; margin-bottom:15px; color:#37474F;">🔔 실시간 이벤트</div>
+            <div style="font-weight:bold; color:var(--primary); margin-bottom:10px;">📊 운영 현황</div>
             <div id="event-list"></div>
         </div>
         <div id="chat-panel">
-            <div id="messages"><div class="msg bot">한국물류 AI 관제 시스템입니다. 🇰🇷</div></div>
+            <div id="messages"><div class="msg bot">한국물류 AI입니다. 🇰🇷</div></div>
             <div style="margin-top:10px;"><input type="text" id="chat-input" placeholder="질문 입력..." onkeypress="if(event.key==='Enter') send()"></div>
         </div>
     </div>
 
     <script>
-        // [핵심 변경] physics: false로 설정하여 DB에서 온 x, y 좌표를 강제 사용
+        // [핵심 해결책] Hierarchical Layout (계층형 레이아웃)
+        // 노드 좌표가 없어도 자동으로 트리 구조(위->아래)로 정렬해주는 설정입니다.
+        // 무조건 화면에 뜹니다.
         const nodes = new vis.DataSet([]);
         const edges = new vis.DataSet([]);
         const container = document.getElementById('graph-container');
         const network = new vis.Network(container, { nodes, edges }, {
-            nodes: { shape: 'dot', size: 25, font: { size: 14, color: '#37474F' }, borderWidth: 2, shadow: true },
-            edges: { color: '#B0BEC5', arrows: 'to', width: 2, smooth: { type: 'continuous' } },
-            physics: { enabled: false }, // 물리 엔진 끄기 (좌표 고정)
-            interaction: { dragNodes: false, zoomView: true, dragView: true } // 노드 드래그 막기 (완전 고정)
+            nodes: { shape: 'dot', size: 20, font: { size: 14, color: '#37474F' }, borderWidth: 2, shadow: true },
+            edges: { width: 2, smooth: { type: 'cubicBezier' } },
+            layout: {
+                hierarchical: {
+                    enabled: true,
+                    direction: 'UD', // Up to Down (위에서 아래로)
+                    sortMethod: 'directed', // 방향성 따름
+                    levelSeparation: 150,
+                    nodeSpacing: 100
+                }
+            },
+            physics: { enabled: false } // 레이아웃을 쓰므로 물리엔진 OFF
         });
-
-        let isFirst = true;
 
         async function updateData() {
             try {
-                // 1. 대시보드 통계
+                // 1. 통계 & 이벤트
                 const dRes = await fetch('/api/dashboard-stats');
                 const stats = await dRes.json();
-                stats.zones.forEach(z => {
-                    const el = document.getElementById(`count-${z.id}`);
-                    if(el) el.innerText = z.count;
+                
+                ['Z_IN', 'Z_SORT', 'Z_OUT'].forEach(id => {
+                    const z = stats.zones.find(z => z.id === id);
+                    if(z) document.getElementById(`count-${id}`).innerText = z.count;
                 });
                 
                 const evtDiv = document.getElementById('event-list');
                 evtDiv.innerHTML = '';
                 stats.events.forEach(e => {
-                    const isErr = e.type === 'ERROR';
-                    evtDiv.innerHTML += `<div class="event-item ${isErr?'error':''}"><div style="font-weight:bold; color:${isErr?'#D32F2F':'#7B1FA2'}">${isErr?'⚠ 장애':'✨ 프로모션'}</div>${e.desc}</div>`;
+                    evtDiv.innerHTML += `<div class="event-item ${e.type}"><b>${e.type==='ERROR'?'⚠ 장애':'✨ 프로모션'}</b><br>${e.desc}</div>`;
                 });
 
-                // 2. 그래프 데이터
+                // 2. 그래프
                 const gRes = await fetch('/api/graph-data');
                 const gData = await gRes.json();
                 
                 if (gData.nodes.length > 0) {
                     nodes.update(gData.nodes);
                     edges.update(gData.edges);
-                    if (isFirst) {
-                        network.fit(); // 처음에만 중앙 정렬
-                        isFirst = false;
-                    }
                 }
             } catch(e) { console.error(e); }
         }
@@ -127,12 +126,7 @@
         window.selectZone = function(id) {
             document.querySelectorAll('.process-card').forEach(c => c.classList.remove('active'));
             document.getElementById(`card-${id}`).classList.add('active');
-            
-            // 상세 정보 표시 로직 (간소화)
-            document.getElementById('info-content').innerHTML = `<div style="font-size:1.5rem; font-weight:bold; color:var(--primary)">${id}</div><div>선택된 구역입니다.</div>`;
-            
             network.selectNodes([id]);
-            network.focus(id, { animation: true, scale: 1.2 });
         }
 
         async function send() {
@@ -152,7 +146,6 @@
 
             if(data.related_nodes && data.related_nodes.length > 0) {
                 network.selectNodes(data.related_nodes);
-                network.fit({ nodes: data.related_nodes, animation: true });
             }
         }
     </script>
