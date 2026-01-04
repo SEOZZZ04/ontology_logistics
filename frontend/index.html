@@ -5,277 +5,200 @@
     <title>Logistics Command Center</title>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <style>
-        /* Industrial Dark Theme */
         :root {
-            --bg-dark: #121212;
-            --bg-panel: #1E1E1E;
-            --text-primary: #E0E0E0;
-            --text-secondary: #A0A0A0;
-            --accent-blue: #2196F3;
-            --accent-red: #FF5252;
+            --bg-dark: #121212; --bg-panel: #1E1E1E;
+            --text-primary: #E0E0E0; --text-secondary: #A0A0A0;
+            --accent-blue: #2196F3; --accent-red: #FF5252; --accent-purple: #E040FB;
             --border-color: #333;
         }
         body { 
-            display: flex; height: 100vh; margin: 0; 
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-dark); color: var(--text-primary);
-            overflow: hidden;
+            display: flex; height: 100vh; margin: 0; background: var(--bg-dark); color: var(--text-primary);
+            font-family: 'Segoe UI', sans-serif; overflow: hidden;
         }
         #main-container { display: flex; width: 100%; height: 100%; }
-        
-        /* Left: Graph Area */
-        #graph-panel { flex: 7; height: 100%; border-right: 2px solid var(--border-color); position: relative; }
+        #graph-panel { flex: 7; position: relative; border-right: 1px solid var(--border-color); }
         #graph-container { width: 100%; height: 100%; background: #191919; }
-        .panel-title {
-            position: absolute; top: 10px; left: 20px; 
-            font-size: 1.2rem; font-weight: bold; color: var(--accent-blue);
-            z-index: 10; text-transform: uppercase; letter-spacing: 1px;
-        }
+        .panel-header { position: absolute; top: 15px; left: 20px; z-index: 10; font-weight: bold; color: var(--accent-blue); }
 
-        /* Right: Sidebar */
-        #sidebar { flex: 3; display: flex; flex-direction: column; height: 100%; background: var(--bg-panel); }
-
-        /* Top-Right: Dashboard */
-        #dashboard-panel { 
-            flex: 4; padding: 20px; border-bottom: 2px solid var(--border-color);
-            display: flex; flex-direction: column;
-        }
-        .stat-card {
-            background: #2C2C2C; padding: 15px; margin-bottom: 10px;
-            border-radius: 4px; border-left: 4px solid var(--accent-blue);
-        }
-        .stat-card.alert { border-left-color: var(--accent-red); }
-        .stat-title { font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 5px; }
-        .stat-value { font-size: 1.5rem; font-weight: bold; }
-        #zone-stats-container { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px;}
-        .zone-stat { flex: 1; min-width: 80px; text-align: center; background:#252525; padding: 10px; border-radius:4px;}
-
-        /* Bottom-Right: Chat */
-        #chat-panel { flex: 6; display: flex; flex-direction: column; padding: 20px; overflow: hidden; }
-        #messages { flex: 1; overflow-y: auto; border: 1px solid var(--border-color); padding: 10px; margin-bottom: 10px; background: #151515; }
-        .msg { margin: 5px 0; padding: 10px 12px; border-radius: 4px; max-width: 80%; word-break: break-word;}
-        .user { background: #0D47A1; align-self: flex-end; margin-left: auto; }
-        .bot { background: #37474F; }
-        #chat-input-container { display: flex; }
-        #chat-input { 
-            flex: 1; padding: 12px; font-size: 14px; 
-            background: #2C2C2C; border: 1px solid var(--border-color); 
-            color: var(--text-primary); outline: none;
-        }
-        #chat-input::placeholder { color: var(--text-secondary); }
+        #sidebar { flex: 3; display: flex; flex-direction: column; background: var(--bg-panel); }
+        #dashboard { flex: 4; padding: 20px; border-bottom: 1px solid var(--border-color); overflow-y: auto; }
+        #chat-panel { flex: 6; display: flex; flex-direction: column; padding: 20px; }
         
-        /* Vis.js 커스텀 스타일 */
-        div.vis-network div.vis-navigation div.vis-button {
-            background-color: var(--bg-panel);
-            background-image: none;
-            color: var(--text-primary);
-        }
+        /* Stats Cards */
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+        .card { background: #2C2C2C; padding: 15px; border-radius: 6px; text-align: center; }
+        .card-title { font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 5px; }
+        .card-value { font-size: 1.5rem; font-weight: bold; }
+        .card.alert { border-bottom: 3px solid var(--accent-red); }
+        .card.promo { border-bottom: 3px solid var(--accent-purple); }
+
+        /* Chat */
+        #messages { flex: 1; overflow-y: auto; background: #151515; padding: 10px; margin-bottom: 10px; border-radius: 4px; }
+        .msg { padding: 8px 12px; margin: 5px 0; border-radius: 4px; max-width: 85%; font-size: 0.9rem; }
+        .user { background: #1565C0; align-self: flex-end; margin-left: auto; }
+        .bot { background: #424242; }
+        #input-box { width: 100%; padding: 12px; background: #2C2C2C; border: 1px solid #444; color: white; border-radius: 4px; box-sizing: border-box; }
+
+        /* Toast Notification */
+        #toast-container { position: fixed; top: 20px; right: 32%; z-index: 100; display: flex; flex-direction: column; gap: 10px; }
+        .toast { background: rgba(0,0,0,0.85); color: white; padding: 15px 20px; border-radius: 4px; border-left: 5px solid var(--accent-blue); animation: slideIn 0.3s; width: 300px;}
+        .toast.error { border-left-color: var(--accent-red); }
+        .toast.promo { border-left-color: var(--accent-purple); box-shadow: 0 0 15px var(--accent-purple); }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
     </style>
 </head>
 <body>
+    <div id="toast-container"></div>
+
     <div id="main-container">
         <div id="graph-panel">
-            <div class="panel-title">📡 Real-time Logistics Ontology</div>
+            <div class="panel-header">📡 LIVE LOGISTICS TWIN</div>
             <div id="graph-container"></div>
         </div>
 
         <div id="sidebar">
-            <div id="dashboard-panel">
-                <div class="panel-title" style="position:static; margin-bottom:15px;">📊 Operational Status</div>
-                
-                <div class="stat-card alert">
-                    <div class="stat-title">Active Alerts (Events)</div>
-                    <div class="stat-value" id="alert-count">0</div>
-                </div>
-                
-                <div style="margin-top:10px; font-size:0.9rem; color:var(--text-secondary);">Zone Throughput (Items)</div>
-                <div id="zone-stats-container">
+            <div id="dashboard">
+                <div style="font-weight:bold; margin-bottom:10px;">📊 OPERATIONAL STATUS</div>
+                <div class="stat-grid">
+                    <div class="card alert">
+                        <div class="card-title">ERRORS</div>
+                        <div class="card-value" id="val-error">0</div>
                     </div>
+                    <div class="card promo">
+                        <div class="card-title">PROMOTIONS</div>
+                        <div class="card-value" id="val-promo">0</div>
+                    </div>
+                </div>
+                <div style="margin-top:20px; font-size:0.9rem; color:#888;">ZONE THROUGHPUT</div>
+                <div id="zone-list" style="margin-top:10px; display:flex; flex-direction:column; gap:5px;"></div>
             </div>
 
             <div id="chat-panel">
-                <div class="panel-title" style="position:static; margin-bottom:15px;">🤖 AI Analyst</div>
                 <div id="messages"></div>
-                <div id="chat-input-container">
-                    <input type="text" id="chat-input" placeholder="명령을 입력하세요 (예: '현재 장애 현황 보여줘')..." onkeypress="handleKey(event)">
-                </div>
+                <input type="text" id="input-box" placeholder="Ask AI (e.g., '현재 병목 구간은?', '이벤트 있어?')..." onkeypress="if(event.key==='Enter') send()">
             </div>
         </div>
     </div>
 
     <script>
-        // =========================================
-        // 1. 그래프 초기화 (Vis.js Settings)
-        // =========================================
+        // 1. Graph Config (Physics stops after stabilization)
+        const nodes = new vis.DataSet([]);
+        const edges = new vis.DataSet([]);
         const container = document.getElementById('graph-container');
-        const nodesDS = new vis.DataSet([]);
-        const edgesDS = new vis.DataSet([]);
-        const data = { nodes: nodesDS, edges: edgesDS };
-
-        const options = {
-            nodes: {
-                shape: 'dot',
-                size: 20,
-                font: { size: 14, color: '#E0E0E0', strokeWidth: 2, strokeColor: '#121212' },
-                borderWidth: 2,
-                shadow: true
-            },
-            edges: {
-                width: 2,
-                shadow: false,
-                smooth: { type: 'continuous' },
-                arrows: { to: { enabled: true, scaleFactor: 0.5 } }
-            },
+        const network = new vis.Network(container, { nodes, edges }, {
+            nodes: { shape: 'dot', size: 15, font: { color: '#fff', size: 12 } },
+            edges: { arrows: 'to', color: '#546E7A' },
             physics: {
                 enabled: true,
+                stabilization: { iterations: 500, updateInterval: 100 },
                 solver: 'forceAtlas2Based',
-                forceAtlas2Based: {
-                    gravitationalConstant: -50,
-                    centralGravity: 0.01,
-                    springConstant: 0.08,
-                    springLength: 100,
-                    damping: 0.4,
-                    avoidOverlap: 0.5
-                },
-                stabilization: {
-                    enabled: true,
-                    iterations: 1000,
-                    updateInterval: 25,
-                    onlyDynamicEdges: false,
-                    fit: true
-                }
-            },
-            interaction: { hover: true, tooltipDelay: 200, hideEdgesOnDrag: true }
-        };
-        const network = new vis.Network(container, data, options);
-        
-        network.once("stabilizationIterationsDone", function() {
-            network.setOptions( { physics: false } );
+            }
         });
 
+        // **핵심**: 안정화되면 물리엔진 끄기 (뺑글뺑글 방지)
+        network.once("stabilizationIterationsDone", () => {
+            network.setOptions({ physics: { enabled: false } }); 
+        });
 
-        // =========================================
-        // 2. 데이터 폴링 (그래프 & 대시보드 업데이트)
-        // =========================================
-        let isHighlightActive = false;
+        // 2. Data Polling
+        let knownEvents = new Set(); // 알림 중복 방지용
 
-        async function fetchData() {
-            if (isHighlightActive) return;
-
+        async function updateData() {
             try {
-                const graphRes = await fetch('/api/graph-data');
-                const graphJson = await graphRes.json();
-                nodesDS.update(graphJson.nodes);
-                edgesDS.update(graphJson.edges);
+                // A. Graph Update
+                const gRes = await fetch('/api/graph-data');
+                const gData = await gRes.json();
+                
+                // 기존 노드 위치 유지하며 업데이트
+                nodes.update(gData.nodes); 
+                // 엣지는 새로 그리기 (잔상 방지)
+                const currentEdgeIds = edges.getIds();
+                const newEdgeIds = gData.edges.map(e => `${e.from}-${e.to}`);
+                edges.remove(currentEdgeIds.filter(id => !newEdgeIds.includes(id)));
+                edges.update(gData.edges);
 
-                const dashRes = await fetch('/api/dashboard-stats');
-                const dashJson = await dashRes.json();
-                updateDashboard(dashJson);
+                // B. Dashboard Update
+                const dRes = await fetch('/api/dashboard-stats');
+                const dData = await dRes.json();
+                
+                document.getElementById('val-error').innerText = dData.errors;
+                document.getElementById('val-promo').innerText = dData.promotions;
+                
+                const zoneDiv = document.getElementById('zone-list');
+                zoneDiv.innerHTML = '';
+                dData.zones.forEach(z => {
+                    zoneDiv.innerHTML += `
+                        <div style="background:#252525; padding:8px; display:flex; justify-content:space-between; border-radius:4px;">
+                            <span>${z.name}</span> <span style="font-weight:bold; color:#2196F3">${z.count} units</span>
+                        </div>`;
+                });
 
-            } catch (err) { console.error(err); }
+                // C. Toast Alerts (새로운 이벤트 감지 시)
+                dData.recent_events.forEach(desc => {
+                    if (!knownEvents.has(desc)) {
+                        knownEvents.add(desc);
+                        showToast(desc);
+                    }
+                });
+
+            } catch (e) { console.error(e); }
+        }
+        setInterval(updateData, 2000);
+
+        // 3. Toast UI Logic
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const el = document.createElement('div');
+            el.className = 'toast';
+            if (msg.includes('프로모션')) el.className += ' promo';
+            if (msg.includes('경고') || msg.includes('실패')) el.className += ' error';
+            el.innerText = msg;
+            container.appendChild(el);
+            setTimeout(() => el.remove(), 5000); // 5초 뒤 삭제
         }
 
-        function updateDashboard(data) {
-            document.getElementById('alert-count').innerText = data.errors;
-            
-            const container = document.getElementById('zone-stats-container');
-            container.innerHTML = '';
-            data.zones.forEach(z => {
-                const div = document.createElement('div');
-                div.className = 'zone-stat stat-card';
-                div.style.borderLeftColor = '#0277BD';
-                div.innerHTML = `<div class="stat-title">${z.name}</div><div class="stat-value">${z.count}</div>`;
-                container.appendChild(div);
-            });
-        }
-        
-        setInterval(fetchData, 3000);
-        fetchData();
-
-
-        // =========================================
-        // 3. 채팅 & 인터랙티브 하이라이팅 로직
-        // =========================================
-        async function sendMessage() {
-            const input = document.getElementById('chat-input');
+        // 4. Chat & Highlight Logic
+        async function send() {
+            const input = document.getElementById('input-box');
             const text = input.value;
             if (!text) return;
 
-            addMessage(text, 'user');
+            addMsg(text, 'user');
             input.value = '';
-            addMessage('분석 중입니다...', 'bot', true); 
-
-            try {
-                const res = await fetch('/api/chat', {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({message: text})
-                });
-                const json = await res.json();
-                
-                // [수정됨] 파이썬 주석(#)을 자바스크립트 주석(//)으로 변경
-                document.getElementById('messages').lastChild.remove(); 
-                addMessage(json.reply, 'bot');
-
-                if (json.related_nodes && json.related_nodes.length > 0) {
-                    highlightNodes(json.related_nodes);
-                } else {
-                    resetHighlight();
-                }
-
-            } catch (e) {
-                if(document.getElementById('messages').lastChild) {
-                    document.getElementById('messages').lastChild.textContent = "에러가 발생했습니다.";
-                }
-                resetHighlight();
-                console.error(e);
-            }
-        }
-
-        function highlightNodes(relatedIds) {
-            isHighlightActive = true;
-            const allNodes = nodesDS.get();
-            const updateArray = [];
-            const highlightIdsSet = new Set(relatedIds);
-
-            allNodes.forEach(node => {
-                if (highlightIdsSet.has(node.id)) {
-                    updateArray.push({
-                        id: node.id,
-                        color: { background: '#FFFFFF', border: '#FFD700' },
-                        font: { size: 18, color: '#FFFFFF', background: '#000000' },
-                        shadow: { enabled: true, color: 'rgba(255,215,0,0.8)', size: 20 }
-                    });
-                } else {
-                    updateArray.push({
-                        id: node.id,
-                        color: { background: '#333333', border: '#222222' },
-                        font: { color: '#555555' },
-                        shadow: { enabled: false }
-                    });
-                }
-            });
-            nodesDS.update(updateArray);
             
-            if (relatedIds.length > 0) {
-                network.fit({ nodes: relatedIds, animation: true });
+            const res = await fetch('/api/chat', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: text})
+            });
+            const data = await res.json();
+            addMsg(data.reply, 'bot');
+
+            if (data.related_nodes && data.related_nodes.length > 0) {
+                highlight(data.related_nodes);
+            } else {
+                nodes.update(nodes.get().map(n => ({id: n.id, opacity: 1}))); // Reset
             }
         }
 
-        function resetHighlight() {
-            isHighlightActive = false;
-             fetchData(); 
-             network.fit({ animation: true });
+        function highlight(ids) {
+            const all = nodes.get();
+            const updates = all.map(n => ({
+                id: n.id,
+                color: ids.includes(n.id) ? {background: '#FFF', border: '#FFD700'} : {background: '#333', border: '#222'},
+                opacity: ids.includes(n.id) ? 1 : 0.2
+            }));
+            nodes.update(updates);
+            network.fit({ nodes: ids, animation: true });
         }
 
-        function addMessage(text, sender, isTemp=false) {
+        function addMsg(txt, type) {
             const div = document.createElement('div');
-            div.className = `msg ${sender}`;
-            div.innerText = text;
+            div.className = `msg ${type}`;
+            div.innerText = txt;
             document.getElementById('messages').appendChild(div);
-            document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+            document.getElementById('messages').scrollTop = 9999;
         }
-
-        function handleKey(e) { if (e.key === 'Enter') sendMessage(); }
     </script>
 </body>
 </html>
