@@ -2,282 +2,218 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Smart Logistics Dashboard</title>
+    <title>Logistics Monitor</title>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
+    <link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
     <style>
-        :root { --primary: #FF6F00; --bg-body: #F0F2F5; --danger: #D32F2F; --promo: #7B1FA2; --agv-active: #2962FF; }
-        body { margin: 0; height: 100vh; display: flex; font-family: 'Pretendard', sans-serif; background: var(--bg-body); overflow: hidden; }
-
-        #main-container { flex: 7; display: flex; flex-direction: column; position: relative; }
-        #sidebar { flex: 3; display: flex; flex-direction: column; background: white; border-left: 1px solid #ddd; z-index: 20; box-shadow: -2px 0 10px rgba(0,0,0,0.05); }
-
-        #status-panel { 
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); 
-            display: flex; gap: 30px; z-index: 10; 
-        }
-        .card { 
-            width: 140px; padding: 15px; background: rgba(255, 255, 255, 0.95); 
-            border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
-            text-align: center; border: 2px solid transparent; transition: 0.3s; cursor: pointer;
-            backdrop-filter: blur(5px);
-        }
-        .card:hover { transform: translateY(-3px); }
-        .card.active { border-color: var(--primary); background: #FFF3E0; }
-        .card-title { font-size: 13px; color: #666; font-weight: 700; margin-bottom: 5px; }
-        .card-value { font-size: 28px; font-weight: 800; color: #333; }
+        :root { --primary: #2962FF; --bg: #F5F7FA; --error: #D50000; --promo: #AA00FF; }
+        body { margin: 0; font-family: 'Pretendard', sans-serif; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
         
-        #network { width: 100%; height: 100%; background: #fafafa; }
+        #main { flex: 3; position: relative; display: flex; flex-direction: column; }
+        #sidebar { flex: 1; background: white; border-left: 1px solid #ddd; display: flex; flex-direction: column; padding: 20px; box-shadow: -5px 0 15px rgba(0,0,0,0.05); z-index: 10; }
 
-        #log-section { flex: 1; padding: 20px; border-bottom: 1px solid #eee; overflow-y: auto; background: #fafafa; }
-        .log-item { padding: 10px; margin-bottom: 8px; border-radius: 6px; font-size: 13px; background: white; border-left: 4px solid #ccc; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .log-item.ERROR { border-left-color: var(--danger); background: #FFEBEE; }
-        .log-item.PROMO { border-left-color: var(--promo); background: #F3E5F5; }
+        /* 상태 카드 */
+        #cards { position: absolute; top: 20px; left: 20px; display: flex; gap: 15px; z-index: 5; }
+        .card { background: rgba(255,255,255,0.9); padding: 15px 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-left: 5px solid var(--primary); backdrop-filter: blur(5px); transition: 0.3s; }
+        .card:hover { transform: translateY(-3px); }
+        .card-label { font-size: 12px; color: #666; font-weight: bold; text-transform: uppercase; }
+        .card-val { font-size: 24px; font-weight: 800; color: #333; margin-top: 5px; }
 
-        #chat-section { height: 60%; display: flex; flex-direction: column; background: white; }
-        #chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; }
-        .msg.bot { background: #F1F3F5; color: #333; align-self: flex-start; border-bottom-left-radius: 2px; }
-        .msg.user { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
-        .input-area { padding: 15px; border-top: 1px solid #eee; display: flex; gap: 10px; }
-        #chat-input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 20px; outline: none; }
+        #network { width: 100%; height: 100%; }
 
-        #info-modal {
-            display: none; position: absolute; bottom: 20px; left: 20px; width: 300px; 
-            background: white; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); 
-            z-index: 100; overflow: hidden; animation: slideUp 0.3s;
-        }
-        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-        .modal-header { background: var(--primary); color: white; padding: 12px; font-weight: bold; display: flex; justify-content: space-between; }
-        .modal-body { padding: 15px; max-height: 200px; overflow-y: auto; font-size: 13px; }
-        .item-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; }
-        .close-btn { cursor: pointer; }
+        /* 채팅 & 로그 */
+        #logs { height: 30%; overflow-y: auto; margin-bottom: 20px; border-bottom: 1px solid #eee; }
+        .log-entry { font-size: 13px; padding: 8px; margin-bottom: 5px; border-radius: 4px; background: #eee; }
+        .log-entry.ERROR { background: #FFEBEE; color: #B71C1C; border-left: 3px solid var(--error); }
+        .log-entry.PROMO { background: #F3E5F5; color: #4A148C; border-left: 3px solid var(--promo); }
 
+        #chat-box { flex: 1; display: flex; flex-direction: column; }
+        #messages { flex: 1; overflow-y: auto; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .msg { padding: 10px; border-radius: 8px; font-size: 14px; max-width: 90%; }
+        .msg.bot { background: #E3F2FD; align-self: flex-start; }
+        .msg.user { background: var(--primary); color: white; align-self: flex-end; }
+        input { padding: 12px; border: 1px solid #ddd; border-radius: 20px; outline: none; }
+
+        /* 모달 */
+        #modal { display: none; position: absolute; bottom: 30px; left: 30px; width: 250px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); z-index: 100; }
     </style>
 </head>
 <body>
 
-<div id="main-container">
-    <div id="status-panel">
+<div id="main">
+    <div id="cards">
         <div class="card" onclick="focusNode('Z_IN')">
-            <div class="card-title">📦 입고 (Inbound)</div>
-            <div class="card-value" id="val-Z_IN">0</div>
+            <div class="card-label">Inbound</div>
+            <div class="card-val" id="cnt-Z_IN">0</div>
         </div>
         <div class="card" onclick="focusNode('Z_SORT')">
-            <div class="card-title">🏭 분류 (Sorting)</div>
-            <div class="card-value" id="val-Z_SORT">0</div>
+            <div class="card-label">Sorting</div>
+            <div class="card-val" id="cnt-Z_SORT">0</div>
         </div>
         <div class="card" onclick="focusNode('Z_OUT')">
-            <div class="card-title">🚚 출고 (Outbound)</div>
-            <div class="card-value" id="val-Z_OUT">0</div>
+            <div class="card-label">Outbound</div>
+            <div class="card-val" id="cnt-Z_OUT">0</div>
         </div>
     </div>
-
     <div id="network"></div>
-
-    <div id="info-modal">
-        <div class="modal-header">
-            <span id="modal-title">상세 정보</span>
-            <span class="close-btn" onclick="closeModal()"><i class="fas fa-times"></i></span>
-        </div>
-        <div class="modal-body" id="modal-content">Loading...</div>
+    <div id="modal">
+        <h4 id="m-title" style="margin:0 0 10px 0;">Details</h4>
+        <div id="m-body" style="font-size:13px; color:#555;"></div>
+        <button onclick="document.getElementById('modal').style.display='none'" style="margin-top:10px; width:100%; padding:5px;">Close</button>
     </div>
 </div>
 
 <div id="sidebar">
-    <div id="log-section">
-        <div style="font-weight:bold; margin-bottom:10px; color:#555;">📢 실시간 로그</div>
-        <div id="log-list"></div>
-    </div>
-    <div id="chat-section">
-        <div id="chat-messages">
-            <div class="msg bot">🤖 안녕하세요! 물류 관제 AI입니다.</div>
+    <div id="logs"><div style="color:#999; text-align:center; padding:10px;">System Ready</div></div>
+    <div id="chat-box">
+        <div id="messages">
+            <div class="msg bot">AI 물류 관제 시스템입니다.</div>
         </div>
-        <div class="input-area">
-            <input type="text" id="chat-input" placeholder="질문 입력..." onkeypress="if(event.key==='Enter') sendChat()">
-            <button onclick="sendChat()" style="background:none; border:none; cursor:pointer;"><i class="fas fa-paper-plane" style="color:var(--primary); font-size:18px;"></i></button>
-        </div>
+        <input type="text" id="chat-in" placeholder="명령어 입력..." onkeypress="if(event.key==='Enter') send()">
     </div>
 </div>
 
 <script>
-    /* === 1. Vis.js 설정 === */
+    // 1. 토폴로지 정의 (트럭 추가)
     const nodes = new vis.DataSet([
-        { id: 'DT_HUB', label: '동탄 허브\n(Center)', group: 'Center', x: 0, y: -200 },
-        { id: 'Z_IN',   label: '입고존\n(Inbound)',   group: 'Zone',   x: -300, y: 0 },
-        { id: 'Z_SORT', label: '분류존\n(Sorting)',   group: 'Zone',   x: 0,    y: 0 },
-        { id: 'Z_OUT',  label: '출고존\n(Outbound)',  group: 'Zone',   x: 300,  y: 0 },
-        { id: 'AGV_01', label: 'AGV-01\n(대기)',     group: 'AGV',    x: -150, y: 150 },
-        { id: 'AGV_02', label: 'AGV-02\n(대기)',     group: 'AGV',    x: 150,  y: 150 }
+        { id: 'Z_IN', label: '입고존\n(Inbound)', group: 'Zone', x: -300, y: 0 },
+        { id: 'Z_SORT', label: '분류존\n(Sorting)', group: 'Zone', x: 0, y: 0 },
+        { id: 'Z_OUT', label: '출고존\n(Outbound)', group: 'Zone', x: 300, y: 0 },
+        { id: 'TRUCK', label: '물류 트럭\n(Shipping)', group: 'Truck', x: 450, y: 0 }, // 트럭 노드
+        { id: 'AGV_01', label: 'AGV-01', group: 'AGV', x: -150, y: 100 },
+        { id: 'AGV_02', label: 'AGV-02', group: 'AGV', x: 150, y: 100 }
     ]);
 
     const edges = new vis.DataSet([
-        { from: 'DT_HUB', to: 'Z_IN', arrows: 'to', color: {color:'#ddd'} },
-        { from: 'DT_HUB', to: 'Z_SORT', arrows: 'to', color: {color:'#ddd'} },
-        { from: 'DT_HUB', to: 'Z_OUT', arrows: 'to', color: {color:'#ddd'} },
-        { from: 'Z_IN',   to: 'Z_SORT', arrows: 'to', label: 'Main Line', width: 2, dashes: true },
-        { from: 'Z_SORT', to: 'Z_OUT', arrows: 'to', label: 'Main Line', width: 2, dashes: true },
-        { from: 'AGV_01', to: 'Z_IN', dashes: true, color: {color:'#ccc'} },
-        { from: 'AGV_02', to: 'Z_SORT', dashes: true, color: {color:'#ccc'} }
+        { from: 'Z_IN', to: 'Z_SORT', arrows: 'to', dashes: true, width: 2, label: 'Flow' },
+        { from: 'Z_SORT', to: 'Z_OUT', arrows: 'to', dashes: true, width: 2, label: 'Flow' },
+        { from: 'Z_OUT', to: 'TRUCK', arrows: 'to', width: 3, color: {color:'#555'} },
+        { from: 'AGV_01', to: 'Z_IN', dashes: true, color: '#ccc' },
+        { from: 'AGV_02', to: 'Z_SORT', dashes: true, color: '#ccc' }
     ]);
 
     const container = document.getElementById('network');
     const network = new vis.Network(container, { nodes, edges }, {
-        nodes: { 
-            shape: 'dot', size: 30, font: { color: '#333', size: 14, face: 'Pretendard', multi: 'html' },
-            borderWidth: 2, shadow: true
-        },
+        nodes: { shape: 'box', margin: 10, font: { color: 'white' }, shadow: true },
         groups: {
-            Center: { color: { background: '#263238', border: '#263238' }, font: { color: 'white' }, shape: 'hexagon', size: 50 },
-            Zone:   { color: { background: '#FF6F00', border: 'white' }, font: { color: 'white' }, shape: 'box', margin: 15 },
-            AGV:    { color: { background: '#90A4AE', border: 'white' }, font: { color: 'white' } }, // 기본 회색
-            AGV_Active: { color: { background: '#2962FF', border: 'white' }, font: { color: 'white' } }, // 운반중 파란색
-            Error:  { color: { background: '#D32F2F', border: '#B71C1C' } },
-            Promo:  { color: { background: '#7B1FA2', border: '#4A148C' } },
-            Highlight: { color: { background: '#FFD600', border: '#F57F17' }, font: {color: 'black'} }
+            Zone: { color: '#2962FF' },
+            AGV: { color: '#78909C', shape: 'ellipse' },
+            AGV_Busy: { color: '#00C853', shape: 'ellipse' }, // 운반 중 녹색
+            Truck: { color: '#37474F', shape: 'box', font: {size: 16} },
+            Error: { color: '#D50000' },
+            Promo: { color: '#AA00FF' },
+            Highlight: { color: '#FFD600', font:{color:'black'} }
         },
         physics: false,
         interaction: { hover: true }
     });
-    
-    network.once("afterDrawing", () => network.fit());
+    network.fit();
 
-    /* === 2. 상호작용 === */
-    network.on("click", function (params) {
-        if (params.nodes.length > 0) showModal(params.nodes[0]);
-        else closeModal();
-    });
-
-    function focusNode(id) {
-        network.focus(id, { scale: 1.2, animation: true });
-        showModal(id);
-    }
-
-    async function showModal(nodeId) {
-        const modal = document.getElementById('info-modal');
-        document.getElementById('modal-title').innerText = `${nodeId} 정보`;
-        document.getElementById('modal-content').innerHTML = '로딩 중...';
-        modal.style.display = 'block';
-
-        try {
-            const res = await fetch(`/api/node-details/${nodeId}`);
-            const data = await res.json();
-            
-            if(data.items.length === 0) {
-                document.getElementById('modal-content').innerHTML = '<div style="color:#999; text-align:center;">비어있음</div>';
-            } else {
-                document.getElementById('modal-content').innerHTML = data.items.map(item => `
-                    <div class="item-row">
-                        <span>📦 ${item.id}</span>
-                        <span style="font-size:11px; color:#888;">${item.time}</span>
-                    </div>
-                `).join('');
-            }
-        } catch(e) { console.error(e); }
-    }
-    function closeModal() { document.getElementById('info-modal').style.display = 'none'; }
-
-    /* === 3. 실시간 동기화 (AGV 애니메이션 포함) === */
-    async function syncData() {
+    // 2. 데이터 동기화 루프
+    async function sync() {
         try {
             const res = await fetch('/api/system-status');
             const data = await res.json();
 
-            // (1) 카운트
+            // 카운트 업데이트
             for(const [k, v] of Object.entries(data.counts)) {
-                const el = document.getElementById(`val-${k}`);
+                const el = document.getElementById(`cnt-${k}`);
                 if(el) el.innerText = v;
             }
 
-            // (2) 로그
-            const logBox = document.getElementById('log-list');
+            // 로그창
+            const logDiv = document.getElementById('logs');
             if(data.events.length) {
-                logBox.innerHTML = data.events.map(e => 
-                    `<div class="log-item ${e.type}"><b>[${e.type}]</b> ${e.desc}</div>`
+                logDiv.innerHTML = data.events.map(e => 
+                    `<div class="log-entry ${e.type}"><b>${e.type}</b>: ${e.desc}</div>`
                 ).join('');
-            } else {
-                logBox.innerHTML = '<div style="padding:20px; color:#ccc; text-align:center;">정상 가동</div>';
             }
 
-            // (3) 노드 상태 업데이트 (색상 & 라벨)
+            // 노드 상태 업데이트
             const updates = [];
             
-            // [AGV 상태 반영]
-            for(const [agvId, item] of Object.entries(data.agv_status)) {
+            // AGV 상태 (Busy/Idle)
+            for(const [id, item] of Object.entries(data.agv)) {
                 if(item) {
-                    // 물건 운반 중 -> 파란색 + 아이템 이름
-                    updates.push({ 
-                        id: agvId, 
-                        group: 'AGV_Active', 
-                        label: `${agvId}\n(운송중)\n${item}`
-                    });
+                    updates.push({ id: id, group: 'AGV_Busy', label: `${id}\n📦 ${item}` });
                 } else {
-                    // 대기 중 -> 회색
-                    updates.push({ 
-                        id: agvId, 
-                        group: 'AGV', 
-                        label: `${agvId}\n(대기)`
-                    });
+                    updates.push({ id: id, group: 'AGV', label: id });
                 }
             }
 
-            // [구역 상태 반영]
+            // Zone 상태 (Event)
             ['Z_IN', 'Z_SORT', 'Z_OUT'].forEach(zid => {
                 let grp = 'Zone';
-                if(data.error_active && (zid === 'Z_IN' || zid === 'Z_SORT')) grp = 'Error';
+                if(data.error_active) grp = 'Error';
                 else if(data.promo_active) grp = 'Promo';
                 
-                // 검색 하이라이트 상태가 아닐 때만 업데이트
-                const currentNode = nodes.get(zid);
-                if(currentNode.group !== 'Highlight') {
+                // 하이라이트 중이면 건너뜀
+                if(nodes.get(zid).group !== 'Highlight') {
                     updates.push({ id: zid, group: grp });
                 }
             });
 
-            nodes.update(updates);
+            if(updates.length) nodes.update(updates);
 
         } catch(e) { console.error(e); }
     }
-    setInterval(syncData, 2000);
+    setInterval(sync, 1500); // 1.5초마다 갱신
 
-    /* === 4. 채팅 === */
-    async function sendChat() {
-        const input = document.getElementById('chat-input');
-        const text = input.value.trim();
-        if(!text) return;
-        addMsg(text, 'user');
-        input.value = '';
-        const ld = addMsg('...', 'bot');
+    // 3. UI 기능
+    network.on('click', p => {
+        if(p.nodes.length) showDetail(p.nodes[0]);
+    });
+
+    async function showDetail(id) {
+        const modal = document.getElementById('modal');
+        const body = document.getElementById('m-body');
+        modal.style.display = 'block';
+        document.getElementById('m-title').innerText = id;
+        body.innerHTML = 'Loading...';
         
         try {
-            const res = await fetch('/api/chat', {
-                method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text})
-            });
+            const res = await fetch(`/api/node-details/${id}`);
             const d = await res.json();
-            document.getElementById(ld).innerHTML = d.reply;
+            if(!d.items.length) body.innerHTML = '비어 있음';
+            else body.innerHTML = d.items.map(i => `<div>📦 ${i.id}</div>`).join('');
+        } catch(e) { body.innerText = 'Error'; }
+    }
+
+    async function send() {
+        const inp = document.getElementById('chat-in');
+        const txt = inp.value.trim();
+        if(!txt) return;
+        
+        addMsg(txt, 'user');
+        inp.value = '';
+        
+        try {
+            const res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:txt})});
+            const d = await res.json();
+            addMsg(d.reply, 'bot');
             
-            if(d.related_nodes && d.related_nodes.length) {
-                const ups = d.related_nodes.map(id => ({id:id, group:'Highlight'}));
+            if(d.related_nodes.length) {
+                const ups = d.related_nodes.map(id => ({id, group:'Highlight'}));
                 nodes.update(ups);
-                network.fit({nodes:d.related_nodes, animation:true});
                 setTimeout(() => {
-                    const resets = d.related_nodes.map(id => {
-                        const base = id.startsWith('Z')?'Zone':(id.startsWith('A')?'AGV':'Center');
-                        return {id:id, group:base};
-                    });
+                    const resets = d.related_nodes.map(id => ({id, group:id.startsWith('A')?'AGV':'Zone'}));
                     nodes.update(resets);
                 }, 3000);
             }
-        } catch(e) { document.getElementById(ld).innerHTML = "Error"; }
+        } catch(e) { addMsg("오류 발생", 'bot'); }
     }
-    function addMsg(txt, type) {
+    
+    function addMsg(t, type) {
         const d = document.createElement('div');
         d.className = `msg ${type}`;
-        d.innerHTML = txt;
-        d.id = 'msg-'+Date.now();
-        document.getElementById('chat-messages').appendChild(d);
-        return d.id;
+        d.innerText = t;
+        document.getElementById('messages').appendChild(d);
+    }
+    
+    function focusNode(id) {
+        network.focus(id, {animation:true, scale:1.2});
+        showDetail(id);
     }
 </script>
 </body>
