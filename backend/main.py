@@ -1,30 +1,27 @@
-from fastapi import FastAPI, BackgroundTasks
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 import asyncio
 from contextlib import asynccontextmanager
-from fastapi.responses import RedirectResponse
 
 from .database import db
 from .simulator import simulator
 from .agent import query_agent
 
-# 앱 시작/종료 시 실행될 로직
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 시작 시
-    db.init_schema()  # 스키마 생성
-    db.seed_data()    # 기초 데이터 생성
-    asyncio.create_task(simulator.start()) # 시뮬레이터 가동
+    db.init_schema()
+    db.seed_data()
+    sim_task = asyncio.create_task(simulator.start())
     yield
-    # 종료 시
     simulator.stop()
+    await sim_task
     db.close()
 
 app = FastAPI(lifespan=lifespan)
 
-# CORS 설정 (프론트엔드 통신용)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,44 +29,86 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 정적 파일 서빙 (프론트엔드)
 app.mount("/ui", StaticFiles(directory="frontend", html=True), name="ui")
 
 class ChatRequest(BaseModel):
     message: str
 
+@app.get("/")
+async def read_root():
+    # 접속 시 바로 UI로 리다이렉트
+    return RedirectResponse(url="/ui/index.html")
+
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    response = await query_agent(req.message)
-    return {"reply": response}
+    # agent가 반환하는 dict (reply, related_nodes)를 그대로 프론트에 전달
+    result = await query_agent(req.message)
+    return result
+
+# [New] 우측 상단 대시보드용 통계 API
+@app.get("/api/dashboard-stats")
+async def get_dashboard_stats():
+    # 1. 구역별 물동량
+    q1 = """
+    MATCH (z:Zone)
+    OPTIONAL MATCH (i:Item)-[:STORED_IN]->(z)
+    RETURN z.id as id, z.name as name, count(i) as count ORDER BY z.id
+    """
+    zone_stats = db.run_query(q1)
+    
+    # 2. 현재 활성 장애 이벤트 수
+    q2 = "MATCH (e:Event) RETURN count(e) as error_count"
+    error_stats = db.run_query(q2)
+    
+    return {"zones": zone_stats, "errors": error_stats[0]['error_count'] if error_stats else 0}
+
 
 @app.get("/api/graph-data")
 async def get_graph_data():
-    # 시각화를 위한 전체 노드/엣지 데이터 반환
     query = """
     MATCH (n)-[r]->(m)
-    RETURN n.id as source_id, labels(n)[0] as source_label, 
-           m.id as target_id, labels(m)[0] as target_label, 
+    RETURN n.id as source_id, labels(n)[0] as source_label, n.name as source_name,
+           m.id as target_id, labels(m)[0] as target_label, m.name as target_name,
            type(r) as edge_type
     """
     data = db.run_query(query)
     
-    # vis.js 포맷으로 변환
-    nodes = set()
+    nodes = {}
     edges = []
+    # 산업 현장 느낌의 색상 팔레트
+    color_map = {
+        "Center": {"background": "#FFC107", "border": "#FFA000"}, # 노랑 (강조)
+        "Zone": {"background": "#0277BD", "border": "#01579B"},   # 짙은 파랑
+        "AGV": {"background": "#00C853", "border": "#00A844"},    # 녹색 (정상)
+        "Item": {"background": "#B0BEC5", "border": "#90A4AE"},   # 회색 (일반)
+        "Event": {"background": "#D32F2F", "border": "#B71C1C"}   # 빨강 (장애/경고)
+    }
+    
     for row in data:
-        # 노드 색상 지정
-        color_map = {"Center": "#ff9900", "Zone": "#97c2fc", "AGV": "#fb7e81", "Item": "#7be141", "Event": "#ff0000"}
+        s_id, s_lbl = row['source_id'], row['source_label']
+        t_id, t_lbl = row['target_id'], row['target_label']
         
-        nodes.add((row['source_id'], row['source_label'], color_map.get(row['source_label'], '#ccc')))
-        nodes.add((row['target_id'], row['target_label'], color_map.get(row['target_label'], '#ccc')))
-        edges.append({"from": row['source_id'], "to": row['target_id'], "label": row['edge_type']})
+        if s_id not in nodes:
+            nodes[s_id] = {
+                "id": s_id, 
+                "label": row.get('source_name', s_id),
+                "group": s_lbl,
+                "color": color_map.get(s_lbl, {})
+            }
+        if t_id not in nodes:
+             nodes[t_id] = {
+                "id": t_id, 
+                "label": row.get('target_name', t_id),
+                "group": t_lbl,
+                "color": color_map.get(t_lbl, {})
+            }
+            
+        edges.append({
+            "from": s_id, 
+            "to": t_id, 
+            "label": row['edge_type'],
+            "color": {"color": "#546E7A"}, # 엣지 색상 (차분한 회색)
+            "arrows": "to"
+        })
     
-    node_list = [{"id": n[0], "label": f"{n[1]}\n{n[0]}", "color": n[2]} for n in list(nodes)]
-    
-    return {"nodes": node_list, "edges": edges}
-
-@app.get("/")
-async def read_root():
-    # 접속하자마자 UI 페이지로 강제 이동시킵니다.
-    return RedirectResponse(url="/ui/index.html")
+    return {"nodes": list(nodes.values()), "edges": edges}
