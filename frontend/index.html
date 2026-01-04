@@ -7,209 +7,260 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
     <style>
-        :root { --primary: #FF6F00; --bg-body: #F0F2F5; --text-main: #333; }
+        :root { --primary: #FF6F00; --bg-body: #F0F2F5; --danger: #D32F2F; --promo: #7B1FA2; }
         body { margin: 0; height: 100vh; display: flex; font-family: 'Pretendard', sans-serif; background: var(--bg-body); overflow: hidden; }
 
-        /* 왼쪽 메인 (상태창 + 그래프) */
-        #main-container { flex: 7; display: flex; flex-direction: column; border-right: 1px solid #ddd; }
+        /* 레이아웃 */
+        #main-container { flex: 7; display: flex; flex-direction: column; position: relative; }
+        #sidebar { flex: 3; display: flex; flex-direction: column; background: white; border-left: 1px solid #ddd; z-index: 20; box-shadow: -2px 0 10px rgba(0,0,0,0.05); }
+
+        /* 1. 상단 상태 패널 */
+        #status-panel { 
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); 
+            display: flex; gap: 30px; z-index: 10; 
+        }
+        .card { 
+            width: 140px; padding: 15px; background: rgba(255, 255, 255, 0.95); 
+            border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+            text-align: center; border: 2px solid transparent; transition: 0.3s; cursor: pointer;
+            backdrop-filter: blur(5px);
+        }
+        .card:hover { transform: translateY(-3px); }
+        .card.active { border-color: var(--primary); background: #FFF3E0; }
+        .card-title { font-size: 13px; color: #666; font-weight: 700; margin-bottom: 5px; }
+        .card-value { font-size: 28px; font-weight: 800; color: #333; }
         
-        /* 1. 상단 카드 패널 */
-        #status-panel { height: 160px; background: white; display: flex; justify-content: center; align-items: center; gap: 40px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); z-index: 10; }
-        .card { width: 160px; padding: 20px; border-radius: 16px; background: white; border: 2px solid #eee; text-align: center; cursor: pointer; transition: 0.2s; }
-        .card:hover { transform: translateY(-5px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
-        .card.active { border-color: var(--primary); background: #FFF8E1; }
-        .card-icon { font-size: 24px; color: var(--primary); margin-bottom: 10px; }
-        .card-title { font-size: 14px; color: #666; font-weight: 600; }
-        .card-value { font-size: 32px; font-weight: 800; color: #222; margin-top: 5px; }
-        .arrow { color: #ccc; font-size: 20px; }
+        /* 2. 그래프 영역 */
+        #network { width: 100%; height: 100%; background: #fafafa; }
 
-        /* 2. 하단 그래프 패널 */
-        #graph-panel { flex: 1; position: relative; background: #fafafa; }
-        #network { width: 100%; height: 100%; }
-        .graph-badge { position: absolute; top: 15px; left: 15px; background: white; padding: 8px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.1); color: #555; }
+        /* 3. 사이드바 (로그/채팅) */
+        #log-section { flex: 1; padding: 20px; border-bottom: 1px solid #eee; overflow-y: auto; background: #fafafa; }
+        .log-item { padding: 10px; margin-bottom: 8px; border-radius: 6px; font-size: 13px; background: white; border-left: 4px solid #ccc; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .log-item.ERROR { border-left-color: var(--danger); background: #FFEBEE; }
+        .log-item.PROMO { border-left-color: var(--promo); background: #F3E5F5; }
 
-        /* 오른쪽 사이드바 (로그 + 채팅) */
-        #sidebar { flex: 3; display: flex; flex-direction: column; background: white; }
-        
-        #log-section { height: 35%; padding: 20px; border-bottom: 1px solid #eee; overflow-y: auto; background: #fff; }
-        #log-title { font-weight: bold; margin-bottom: 15px; display: flex; align-items: center; gap: 8px; color: var(--primary); }
-        .log-item { padding: 12px; margin-bottom: 8px; border-radius: 8px; font-size: 13px; background: #f8f9fa; border-left: 4px solid #ddd; }
-        .log-item.ERROR { background: #FFEBEE; border-left-color: #D32F2F; color: #B71C1C; }
-        .log-item.PROMO { background: #F3E5F5; border-left-color: #7B1FA2; color: #4A148C; }
-
-        #chat-section { flex: 1; display: flex; flex-direction: column; background: #f8f9fa; }
+        #chat-section { height: 60%; display: flex; flex-direction: column; background: white; }
         #chat-messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 14px; line-height: 1.5; }
-        .msg.bot { background: white; border: 1px solid #ddd; align-self: flex-start; border-bottom-left-radius: 2px; }
+        .msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; }
+        .msg.bot { background: #F1F3F5; color: #333; align-self: flex-start; border-bottom-left-radius: 2px; }
         .msg.user { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 2px; }
-        
-        #chat-input-area { padding: 20px; background: white; border-top: 1px solid #eee; }
-        #chat-input { width: 93%; padding: 14px; border: 1px solid #ddd; border-radius: 30px; outline: none; transition: 0.2s; }
-        #chat-input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(255, 111, 0, 0.1); }
+        .input-area { padding: 15px; border-top: 1px solid #eee; display: flex; gap: 10px; }
+        #chat-input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 20px; outline: none; }
+
+        /* 4. 정보 모달 */
+        #info-modal {
+            display: none; position: absolute; bottom: 20px; left: 20px; width: 300px; 
+            background: white; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); 
+            z-index: 100; overflow: hidden; animation: slideUp 0.3s;
+        }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-header { background: var(--primary); color: white; padding: 12px; font-weight: bold; display: flex; justify-content: space-between; }
+        .modal-body { padding: 15px; max-height: 200px; overflow-y: auto; font-size: 13px; }
+        .item-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid #eee; }
+        .close-btn { cursor: pointer; }
+
     </style>
 </head>
 <body>
 
 <div id="main-container">
     <div id="status-panel">
-        <div class="card" id="card-Z_IN" onclick="focusNode('Z_IN')">
-            <div class="card-icon"><i class="fas fa-dolly"></i></div>
-            <div class="card-title">입고 (Inbound)</div>
+        <div class="card" onclick="focusNode('Z_IN')">
+            <div class="card-title">📦 입고 (Inbound)</div>
             <div class="card-value" id="val-Z_IN">0</div>
         </div>
-        <div class="arrow"><i class="fas fa-chevron-right"></i></div>
-        <div class="card" id="card-Z_SORT" onclick="focusNode('Z_SORT')">
-            <div class="card-icon"><i class="fas fa-boxes"></i></div>
-            <div class="card-title">분류 (Sorting)</div>
+        <div class="card" onclick="focusNode('Z_SORT')">
+            <div class="card-title">🏭 분류 (Sorting)</div>
             <div class="card-value" id="val-Z_SORT">0</div>
         </div>
-        <div class="arrow"><i class="fas fa-chevron-right"></i></div>
-        <div class="card" id="card-Z_OUT" onclick="focusNode('Z_OUT')">
-            <div class="card-icon"><i class="fas fa-truck-loading"></i></div>
-            <div class="card-title">출고 (Outbound)</div>
+        <div class="card" onclick="focusNode('Z_OUT')">
+            <div class="card-title">🚚 출고 (Outbound)</div>
             <div class="card-value" id="val-Z_OUT">0</div>
         </div>
     </div>
 
-    <div id="graph-panel">
-        <div id="network"></div>
-        <div class="graph-badge"><i class="fas fa-project-diagram"></i> 실시간 온톨로지 뷰</div>
+    <div id="network"></div>
+
+    <div id="info-modal">
+        <div class="modal-header">
+            <span id="modal-title">구역 정보</span>
+            <span class="close-btn" onclick="closeModal()"><i class="fas fa-times"></i></span>
+        </div>
+        <div class="modal-body" id="modal-content">
+            데이터 로딩 중...
+        </div>
     </div>
 </div>
 
 <div id="sidebar">
     <div id="log-section">
-        <div id="log-title"><i class="fas fa-history"></i> 실시간 알림</div>
-        <div id="log-list">
-            <div style="color:#aaa; text-align:center; padding:20px;">시스템 정상 가동 중</div>
-        </div>
+        <div style="font-weight:bold; margin-bottom:10px; color:#555;">📢 실시간 로그</div>
+        <div id="log-list"></div>
     </div>
-    
     <div id="chat-section">
         <div id="chat-messages">
-            <div class="msg bot">👋 안녕하세요! 물류 관제 AI입니다.<br>시스템 상태나 장애 원인을 물어보세요.</div>
+            <div class="msg bot">🤖 안녕하세요! 물류 관제 AI입니다.<br>"현재 입고량 어때?" 또는 "장애 원인이 뭐야?"라고 물어보세요.</div>
         </div>
-        <div id="chat-input-area">
-            <input type="text" id="chat-input" placeholder="질문을 입력하세요..." onkeypress="if(event.key==='Enter') sendChat()">
+        <div class="input-area">
+            <input type="text" id="chat-input" placeholder="질문 입력..." onkeypress="if(event.key==='Enter') sendChat()">
+            <button onclick="sendChat()" style="background:none; border:none; cursor:pointer;"><i class="fas fa-paper-plane" style="color:var(--primary); font-size:18px;"></i></button>
         </div>
     </div>
 </div>
 
 <script>
-    // 1. [초강수] 좌표 직접 지정 데이터 (절대 실패 없음)
-    // 물리 엔진을 끄고 이 좌표대로 그립니다.
-    const staticNodes = [
-        { id: 'DT_HUB', label: '동탄 허브\n(Center)', group: 'Center', x: 0, y: -150 },
-        { id: 'Z_IN',   label: '입고존\n(Inbound)',   group: 'Zone',   x: -250, y: 50 },
-        { id: 'Z_SORT', label: '분류존\n(Sorting)',   group: 'Zone',   x: 0,    y: 50 },
-        { id: 'Z_OUT',  label: '출고존\n(Outbound)',  group: 'Zone',   x: 250,  y: 50 },
+    /* === 1. 온톨로지 시각화 설정 (Vis.js) === */
+    // 아이템 노드는 제외하고, 인프라(Zone, AGV)만 고정적으로 그림
+    const nodes = new vis.DataSet([
+        { id: 'DT_HUB', label: '동탄 허브\n(Center)', group: 'Center', x: 0, y: -200 },
+        { id: 'Z_IN',   label: '입고존\n(Inbound)',   group: 'Zone',   x: -300, y: 0 },
+        { id: 'Z_SORT', label: '분류존\n(Sorting)',   group: 'Zone',   x: 0,    y: 0 },
+        { id: 'Z_OUT',  label: '출고존\n(Outbound)',  group: 'Zone',   x: 300,  y: 0 },
         { id: 'AGV_01', label: 'AGV-01',             group: 'AGV',    x: -150, y: 150 },
         { id: 'AGV_02', label: 'AGV-02',             group: 'AGV',    x: 150,  y: 150 }
-    ];
+    ]);
 
-    const staticEdges = [
-        { from: 'DT_HUB', to: 'Z_IN', arrows: 'to' },
-        { from: 'DT_HUB', to: 'Z_SORT', arrows: 'to' },
-        { from: 'DT_HUB', to: 'Z_OUT', arrows: 'to' },
-        { from: 'Z_IN',   to: 'Z_SORT', arrows: 'to', label: 'NEXT' },
-        { from: 'Z_SORT', to: 'Z_OUT', arrows: 'to', label: 'NEXT' },
+    const edges = new vis.DataSet([
+        { from: 'DT_HUB', to: 'Z_IN', arrows: 'to', color: {color:'#ddd'} },
+        { from: 'DT_HUB', to: 'Z_SORT', arrows: 'to', color: {color:'#ddd'} },
+        { from: 'DT_HUB', to: 'Z_OUT', arrows: 'to', color: {color:'#ddd'} },
+        { from: 'Z_IN',   to: 'Z_SORT', arrows: 'to', label: 'CONVEYOR', width: 3 },
+        { from: 'Z_SORT', to: 'Z_OUT', arrows: 'to', label: 'CONVEYOR', width: 3 },
         { from: 'AGV_01', to: 'Z_IN', dashes: true },
         { from: 'AGV_02', to: 'Z_SORT', dashes: true }
-    ];
-
-    // 색상 설정
-    const COLORS = {
-        Center: '#FF6F00', Zone: '#455A64', AGV: '#00897B', 
-        Error: '#D32F2F', Highlight: '#2979FF', Default: '#90A4AE'
-    };
-
-    // Vis.js 초기화
-    const nodes = new vis.DataSet(staticNodes.map(n => ({
-        ...n,
-        shape: n.group === 'Center' ? 'hexagon' : (n.group === 'Zone' ? 'box' : 'dot'),
-        color: { background: n.group === 'Center' ? COLORS.Center : COLORS.Zone, border: 'white' },
-        font: { color: n.group === 'Center' ? 'white' : 'white' },
-        size: 30,
-        margin: 15,
-        shadow: true
-    })));
-    
-    const edges = new vis.DataSet(staticEdges.map(e => ({
-        ...e, color: { color: '#B0BEC5' }, width: 2
-    })));
+    ]);
 
     const container = document.getElementById('network');
-    const network = new vis.Network(container, { nodes, edges }, {
-        physics: false, // [중요] 물리 엔진 끄기 -> 절대 움직이지 않음
-        interaction: { dragNodes: false, zoomView: true, dragView: true }
-    });
-    
-    // 초기 카메라 맞춤
-    network.fit();
+    const data = { nodes: nodes, edges: edges };
+    const options = {
+        nodes: { 
+            shape: 'dot', size: 30, font: { color: '#333', size: 14, face: 'Pretendard' },
+            borderWidth: 2, shadow: true
+        },
+        groups: {
+            Center: { color: { background: '#263238', border: '#263238' }, font: { color: 'white' }, shape: 'hexagon', size: 50 },
+            Zone:   { color: { background: '#FF6F00', border: 'white' }, font: { color: 'white' }, shape: 'box', margin: 15 },
+            AGV:    { color: { background: '#00897B', border: 'white' }, font: { color: 'white' } },
+            Error:  { color: { background: '#D32F2F', border: '#B71C1C' } }, // 장애 색상
+            Promo:  { color: { background: '#7B1FA2', border: '#4A148C' } }, // 프로모션 색상
+            Highlight: { color: { background: '#FFD600', border: '#F57F17' }, font: {color: 'black'} } // 검색 하이라이트
+        },
+        physics: false, // 고정 좌표 사용
+        interaction: { hover: true, tooltipDelay: 200 }
+    };
+    const network = new vis.Network(container, data, options);
 
-    // 2. 데이터 업데이트 루프 (2초 간격)
-    async function updateData() {
+    // 카메라 초기화
+    network.once("afterDrawing", function() {
+        network.fit({ animation: { duration: 1000, easingFunction: "easeInOutQuad" } });
+    });
+
+    /* === 2. 상호작용 (클릭 & 검색) === */
+    network.on("click", function (params) {
+        if (params.nodes.length > 0) {
+            const nodeId = params.nodes[0];
+            showModal(nodeId);
+        } else {
+            closeModal();
+        }
+    });
+
+    function focusNode(nodeId) {
+        network.focus(nodeId, { scale: 1.2, animation: true });
+        showModal(nodeId);
+    }
+
+    /* === 3. 상세 정보 모달 === */
+    async function showModal(nodeId) {
+        const modal = document.getElementById('info-modal');
+        const title = document.getElementById('modal-title');
+        const content = document.getElementById('modal-content');
+        
+        modal.style.display = 'block';
+        title.innerText = `${nodeId} 상세 정보`;
+        content.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</div>';
+
+        try {
+            // API 호출: 해당 노드의 현재 아이템 리스트 가져오기
+            const res = await fetch(`/api/node-details/${nodeId}`);
+            const data = await res.json();
+            
+            if(data.items.length === 0) {
+                content.innerHTML = '<div style="color:#999; text-align:center; padding:20px;">현재 적재된 물품이 없습니다.</div>';
+            } else {
+                content.innerHTML = data.items.map(item => `
+                    <div class="item-row">
+                        <span>📦 ${item.id}</span>
+                        <span style="font-size:11px; color:#888;">${item.time}</span>
+                    </div>
+                `).join('');
+            }
+        } catch(e) {
+            content.innerText = "정보를 불러오는데 실패했습니다.";
+        }
+    }
+
+    function closeModal() {
+        document.getElementById('info-modal').style.display = 'none';
+    }
+
+    /* === 4. 실시간 데이터 동기화 (2초 주기) === */
+    let currentErrorState = false;
+    let currentPromoState = false;
+
+    async function syncData() {
         try {
             const res = await fetch('/api/system-status');
             const data = await res.json();
 
-            // (1) 카드 숫자 업데이트
-            for(const [id, count] of Object.entries(data.counts)) {
-                const el = document.getElementById(`val-${id}`);
-                if(el) el.innerText = count;
+            // 1. 카운트 업데이트
+            for(const [key, val] of Object.entries(data.counts)) {
+                const el = document.getElementById(`val-${key}`);
+                if(el) el.innerText = val;
             }
 
-            // (2) 로그 업데이트
-            const logDiv = document.getElementById('log-list');
+            // 2. 로그 업데이트
+            const logBox = document.getElementById('log-list');
             if(data.events.length > 0) {
-                logDiv.innerHTML = data.events.map(e => 
-                    `<div class="log-item ${e.type}"><b>${e.type==='ERROR'?'⚠ 장애 발생':'✨ 프로모션'}</b><br>${e.desc}</div>`
+                logBox.innerHTML = data.events.map(e => 
+                    `<div class="log-item ${e.type}"><b>[${e.type}]</b> ${e.desc}</div>`
                 ).join('');
             } else {
-                logDiv.innerHTML = '<div style="color:#aaa; text-align:center; padding:20px;">시스템 정상 가동 중</div>';
+                logBox.innerHTML = '<div style="padding:20px; color:#ccc; text-align:center;">시스템 정상</div>';
             }
 
-            // (3) 그래프 색상 반영 (장애 시 빨간색)
-            const allNodes = nodes.get();
+            // 3. 그래프 색상 변경 (이벤트/프로모션)
             const updates = [];
-            
-            allNodes.forEach(n => {
-                let baseColor = (n.group === 'Center') ? COLORS.Center : COLORS.Zone;
-                if(n.group === 'AGV') baseColor = COLORS.AGV;
+            const hasError = data.error_active;
+            const hasPromo = data.promo_active;
 
-                // 장애가 발생한 구역(data.error_nodes)은 빨간색으로
-                if(data.error_nodes.includes(n.id)) {
-                    updates.push({ id: n.id, color: { background: COLORS.Error } });
+            // 상태가 변했을 때만 업데이트 (깜빡임 방지)
+            nodes.forEach(node => {
+                let newGroup = null;
+                // 기본 그룹 복원
+                const originalGroup = node.id.startsWith('Z') ? 'Zone' : (node.id.startsWith('A') ? 'AGV' : 'Center');
+
+                if (hasError && (node.id === 'Z_IN' || node.id === 'Z_SORT')) {
+                    newGroup = 'Error'; // 장애 발생 시 입고/분류 빨간색
+                } else if (hasPromo) {
+                    newGroup = 'Promo'; // 프로모션 시 전체 보라색 느낌
                 } else {
-                    // 원래 색 복구 (하이라이트 중이 아닐 때만)
-                    if(n.color.background !== COLORS.Highlight && n.color.background !== baseColor) {
-                        updates.push({ id: n.id, color: { background: baseColor } });
-                    }
+                    newGroup = originalGroup;
+                }
+                
+                // 현재 하이라이트(검색) 상태가 아니면 색상 업데이트
+                if (node.group !== 'Highlight' && node.group !== newGroup) {
+                    updates.push({ id: node.id, group: newGroup });
                 }
             });
+
             if(updates.length > 0) nodes.update(updates);
 
-        } catch(e) { console.error("Update Fail:", e); }
+        } catch(e) { console.error("Sync Error:", e); }
     }
-    
-    setInterval(updateData, 2000);
+    setInterval(syncData, 2000);
 
-    // 3. UI 인터랙션 (카드 클릭 & 채팅)
-    window.focusNode = function(id) {
-        // 카드 스타일
-        document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
-        const card = document.getElementById(`card-${id}`);
-        if(card) card.classList.add('active');
-
-        // 그래프 줌 & 하이라이트
-        network.fit({ nodes: [id], animation: true });
-        
-        // 깜빡임 효과
-        const originalColor = nodes.get(id).color;
-        nodes.update({ id: id, color: { background: COLORS.Highlight } });
-        setTimeout(() => nodes.update({ id: id, color: originalColor }), 1500);
-    }
-
+    /* === 5. 채팅 (LLM) === */
     async function sendChat() {
         const input = document.getElementById('chat-input');
         const text = input.value.trim();
@@ -217,8 +268,7 @@
 
         addMsg(text, 'user');
         input.value = '';
-
-        const loadId = addMsg('분석 중...', 'bot', true);
+        const loadingId = addMsg('🔍 분석 중...', 'bot', true);
 
         try {
             const res = await fetch('/api/chat', {
@@ -228,15 +278,28 @@
             });
             const data = await res.json();
             
-            removeMsg(loadId);
+            removeMsg(loadingId);
             addMsg(data.reply, 'bot');
 
+            // 6. LLM이 찾은 노드 하이라이트 (노란색 + 줌)
             if(data.related_nodes && data.related_nodes.length > 0) {
-                focusNode(data.related_nodes[0]); // 첫 번째 관련 노드로 이동
+                const updates = data.related_nodes.map(id => ({ id: id, group: 'Highlight' }));
+                nodes.update(updates);
+                network.fit({ nodes: data.related_nodes, animation: true });
+
+                // 3초 뒤 원래 색상 복귀
+                setTimeout(() => {
+                    const resets = data.related_nodes.map(id => {
+                        const baseGroup = id.startsWith('Z') ? 'Zone' : (id.startsWith('A') ? 'AGV' : 'Center');
+                        return { id: id, group: baseGroup };
+                    });
+                    nodes.update(resets);
+                }, 3000);
             }
+
         } catch(e) {
-            removeMsg(loadId);
-            addMsg("오류가 발생했습니다.", 'bot');
+            removeMsg(loadingId);
+            addMsg("⚠️ AI 연결이 불안정합니다. 잠시 후 다시 시도해주세요.", 'bot');
         }
     }
 
@@ -244,7 +307,7 @@
         const div = document.createElement('div');
         div.className = `msg ${type}`;
         div.innerHTML = text;
-        div.id = isTemp ? 'temp-msg' : '';
+        if(isTemp) div.id = 'temp-msg';
         const box = document.getElementById('chat-messages');
         box.appendChild(div);
         box.scrollTop = box.scrollHeight;
