@@ -7,14 +7,12 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
     <style>
-        :root { --primary: #FF6F00; --bg-body: #F0F2F5; --danger: #D32F2F; --promo: #7B1FA2; }
+        :root { --primary: #FF6F00; --bg-body: #F0F2F5; --danger: #D32F2F; --promo: #7B1FA2; --agv-active: #2962FF; }
         body { margin: 0; height: 100vh; display: flex; font-family: 'Pretendard', sans-serif; background: var(--bg-body); overflow: hidden; }
 
-        /* 레이아웃 */
         #main-container { flex: 7; display: flex; flex-direction: column; position: relative; }
         #sidebar { flex: 3; display: flex; flex-direction: column; background: white; border-left: 1px solid #ddd; z-index: 20; box-shadow: -2px 0 10px rgba(0,0,0,0.05); }
 
-        /* 1. 상단 상태 패널 */
         #status-panel { 
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%); 
             display: flex; gap: 30px; z-index: 10; 
@@ -30,10 +28,8 @@
         .card-title { font-size: 13px; color: #666; font-weight: 700; margin-bottom: 5px; }
         .card-value { font-size: 28px; font-weight: 800; color: #333; }
         
-        /* 2. 그래프 영역 */
         #network { width: 100%; height: 100%; background: #fafafa; }
 
-        /* 3. 사이드바 (로그/채팅) */
         #log-section { flex: 1; padding: 20px; border-bottom: 1px solid #eee; overflow-y: auto; background: #fafafa; }
         .log-item { padding: 10px; margin-bottom: 8px; border-radius: 6px; font-size: 13px; background: white; border-left: 4px solid #ccc; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .log-item.ERROR { border-left-color: var(--danger); background: #FFEBEE; }
@@ -47,7 +43,6 @@
         .input-area { padding: 15px; border-top: 1px solid #eee; display: flex; gap: 10px; }
         #chat-input { flex: 1; padding: 12px; border: 1px solid #ddd; border-radius: 20px; outline: none; }
 
-        /* 4. 정보 모달 */
         #info-modal {
             display: none; position: absolute; bottom: 20px; left: 20px; width: 300px; 
             background: white; border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); 
@@ -83,12 +78,10 @@
 
     <div id="info-modal">
         <div class="modal-header">
-            <span id="modal-title">구역 정보</span>
+            <span id="modal-title">상세 정보</span>
             <span class="close-btn" onclick="closeModal()"><i class="fas fa-times"></i></span>
         </div>
-        <div class="modal-body" id="modal-content">
-            데이터 로딩 중...
-        </div>
+        <div class="modal-body" id="modal-content">Loading...</div>
     </div>
 </div>
 
@@ -99,7 +92,7 @@
     </div>
     <div id="chat-section">
         <div id="chat-messages">
-            <div class="msg bot">🤖 안녕하세요! 물류 관제 AI입니다.<br>"현재 입고량 어때?" 또는 "장애 원인이 뭐야?"라고 물어보세요.</div>
+            <div class="msg bot">🤖 안녕하세요! 물류 관제 AI입니다.</div>
         </div>
         <div class="input-area">
             <input type="text" id="chat-input" placeholder="질문 입력..." onkeypress="if(event.key==='Enter') sendChat()">
@@ -109,213 +102,182 @@
 </div>
 
 <script>
-    /* === 1. 온톨로지 시각화 설정 (Vis.js) === */
-    // 아이템 노드는 제외하고, 인프라(Zone, AGV)만 고정적으로 그림
+    /* === 1. Vis.js 설정 === */
     const nodes = new vis.DataSet([
         { id: 'DT_HUB', label: '동탄 허브\n(Center)', group: 'Center', x: 0, y: -200 },
         { id: 'Z_IN',   label: '입고존\n(Inbound)',   group: 'Zone',   x: -300, y: 0 },
         { id: 'Z_SORT', label: '분류존\n(Sorting)',   group: 'Zone',   x: 0,    y: 0 },
         { id: 'Z_OUT',  label: '출고존\n(Outbound)',  group: 'Zone',   x: 300,  y: 0 },
-        { id: 'AGV_01', label: 'AGV-01',             group: 'AGV',    x: -150, y: 150 },
-        { id: 'AGV_02', label: 'AGV-02',             group: 'AGV',    x: 150,  y: 150 }
+        { id: 'AGV_01', label: 'AGV-01\n(대기)',     group: 'AGV',    x: -150, y: 150 },
+        { id: 'AGV_02', label: 'AGV-02\n(대기)',     group: 'AGV',    x: 150,  y: 150 }
     ]);
 
     const edges = new vis.DataSet([
         { from: 'DT_HUB', to: 'Z_IN', arrows: 'to', color: {color:'#ddd'} },
         { from: 'DT_HUB', to: 'Z_SORT', arrows: 'to', color: {color:'#ddd'} },
         { from: 'DT_HUB', to: 'Z_OUT', arrows: 'to', color: {color:'#ddd'} },
-        { from: 'Z_IN',   to: 'Z_SORT', arrows: 'to', label: 'CONVEYOR', width: 3 },
-        { from: 'Z_SORT', to: 'Z_OUT', arrows: 'to', label: 'CONVEYOR', width: 3 },
-        { from: 'AGV_01', to: 'Z_IN', dashes: true },
-        { from: 'AGV_02', to: 'Z_SORT', dashes: true }
+        { from: 'Z_IN',   to: 'Z_SORT', arrows: 'to', label: 'Main Line', width: 2, dashes: true },
+        { from: 'Z_SORT', to: 'Z_OUT', arrows: 'to', label: 'Main Line', width: 2, dashes: true },
+        { from: 'AGV_01', to: 'Z_IN', dashes: true, color: {color:'#ccc'} },
+        { from: 'AGV_02', to: 'Z_SORT', dashes: true, color: {color:'#ccc'} }
     ]);
 
     const container = document.getElementById('network');
-    const data = { nodes: nodes, edges: edges };
-    const options = {
+    const network = new vis.Network(container, { nodes, edges }, {
         nodes: { 
-            shape: 'dot', size: 30, font: { color: '#333', size: 14, face: 'Pretendard' },
+            shape: 'dot', size: 30, font: { color: '#333', size: 14, face: 'Pretendard', multi: 'html' },
             borderWidth: 2, shadow: true
         },
         groups: {
             Center: { color: { background: '#263238', border: '#263238' }, font: { color: 'white' }, shape: 'hexagon', size: 50 },
             Zone:   { color: { background: '#FF6F00', border: 'white' }, font: { color: 'white' }, shape: 'box', margin: 15 },
-            AGV:    { color: { background: '#00897B', border: 'white' }, font: { color: 'white' } },
-            Error:  { color: { background: '#D32F2F', border: '#B71C1C' } }, // 장애 색상
-            Promo:  { color: { background: '#7B1FA2', border: '#4A148C' } }, // 프로모션 색상
-            Highlight: { color: { background: '#FFD600', border: '#F57F17' }, font: {color: 'black'} } // 검색 하이라이트
+            AGV:    { color: { background: '#90A4AE', border: 'white' }, font: { color: 'white' } }, // 기본 회색
+            AGV_Active: { color: { background: '#2962FF', border: 'white' }, font: { color: 'white' } }, // 운반중 파란색
+            Error:  { color: { background: '#D32F2F', border: '#B71C1C' } },
+            Promo:  { color: { background: '#7B1FA2', border: '#4A148C' } },
+            Highlight: { color: { background: '#FFD600', border: '#F57F17' }, font: {color: 'black'} }
         },
-        physics: false, // 고정 좌표 사용
-        interaction: { hover: true, tooltipDelay: 200 }
-    };
-    const network = new vis.Network(container, data, options);
-
-    // 카메라 초기화
-    network.once("afterDrawing", function() {
-        network.fit({ animation: { duration: 1000, easingFunction: "easeInOutQuad" } });
+        physics: false,
+        interaction: { hover: true }
     });
+    
+    network.once("afterDrawing", () => network.fit());
 
-    /* === 2. 상호작용 (클릭 & 검색) === */
+    /* === 2. 상호작용 === */
     network.on("click", function (params) {
-        if (params.nodes.length > 0) {
-            const nodeId = params.nodes[0];
-            showModal(nodeId);
-        } else {
-            closeModal();
-        }
+        if (params.nodes.length > 0) showModal(params.nodes[0]);
+        else closeModal();
     });
 
-    function focusNode(nodeId) {
-        network.focus(nodeId, { scale: 1.2, animation: true });
-        showModal(nodeId);
+    function focusNode(id) {
+        network.focus(id, { scale: 1.2, animation: true });
+        showModal(id);
     }
 
-    /* === 3. 상세 정보 모달 === */
     async function showModal(nodeId) {
         const modal = document.getElementById('info-modal');
-        const title = document.getElementById('modal-title');
-        const content = document.getElementById('modal-content');
-        
+        document.getElementById('modal-title').innerText = `${nodeId} 정보`;
+        document.getElementById('modal-content').innerHTML = '로딩 중...';
         modal.style.display = 'block';
-        title.innerText = `${nodeId} 상세 정보`;
-        content.innerHTML = '<div style="text-align:center;"><i class="fas fa-spinner fa-spin"></i> 로딩 중...</div>';
 
         try {
-            // API 호출: 해당 노드의 현재 아이템 리스트 가져오기
             const res = await fetch(`/api/node-details/${nodeId}`);
             const data = await res.json();
             
             if(data.items.length === 0) {
-                content.innerHTML = '<div style="color:#999; text-align:center; padding:20px;">현재 적재된 물품이 없습니다.</div>';
+                document.getElementById('modal-content').innerHTML = '<div style="color:#999; text-align:center;">비어있음</div>';
             } else {
-                content.innerHTML = data.items.map(item => `
+                document.getElementById('modal-content').innerHTML = data.items.map(item => `
                     <div class="item-row">
                         <span>📦 ${item.id}</span>
                         <span style="font-size:11px; color:#888;">${item.time}</span>
                     </div>
                 `).join('');
             }
-        } catch(e) {
-            content.innerText = "정보를 불러오는데 실패했습니다.";
-        }
+        } catch(e) { console.error(e); }
     }
+    function closeModal() { document.getElementById('info-modal').style.display = 'none'; }
 
-    function closeModal() {
-        document.getElementById('info-modal').style.display = 'none';
-    }
-
-    /* === 4. 실시간 데이터 동기화 (2초 주기) === */
-    let currentErrorState = false;
-    let currentPromoState = false;
-
+    /* === 3. 실시간 동기화 (AGV 애니메이션 포함) === */
     async function syncData() {
         try {
             const res = await fetch('/api/system-status');
             const data = await res.json();
 
-            // 1. 카운트 업데이트
-            for(const [key, val] of Object.entries(data.counts)) {
-                const el = document.getElementById(`val-${key}`);
-                if(el) el.innerText = val;
+            // (1) 카운트
+            for(const [k, v] of Object.entries(data.counts)) {
+                const el = document.getElementById(`val-${k}`);
+                if(el) el.innerText = v;
             }
 
-            // 2. 로그 업데이트
+            // (2) 로그
             const logBox = document.getElementById('log-list');
-            if(data.events.length > 0) {
+            if(data.events.length) {
                 logBox.innerHTML = data.events.map(e => 
                     `<div class="log-item ${e.type}"><b>[${e.type}]</b> ${e.desc}</div>`
                 ).join('');
             } else {
-                logBox.innerHTML = '<div style="padding:20px; color:#ccc; text-align:center;">시스템 정상</div>';
+                logBox.innerHTML = '<div style="padding:20px; color:#ccc; text-align:center;">정상 가동</div>';
             }
 
-            // 3. 그래프 색상 변경 (이벤트/프로모션)
+            // (3) 노드 상태 업데이트 (색상 & 라벨)
             const updates = [];
-            const hasError = data.error_active;
-            const hasPromo = data.promo_active;
-
-            // 상태가 변했을 때만 업데이트 (깜빡임 방지)
-            nodes.forEach(node => {
-                let newGroup = null;
-                // 기본 그룹 복원
-                const originalGroup = node.id.startsWith('Z') ? 'Zone' : (node.id.startsWith('A') ? 'AGV' : 'Center');
-
-                if (hasError && (node.id === 'Z_IN' || node.id === 'Z_SORT')) {
-                    newGroup = 'Error'; // 장애 발생 시 입고/분류 빨간색
-                } else if (hasPromo) {
-                    newGroup = 'Promo'; // 프로모션 시 전체 보라색 느낌
+            
+            // [AGV 상태 반영]
+            for(const [agvId, item] of Object.entries(data.agv_status)) {
+                if(item) {
+                    // 물건 운반 중 -> 파란색 + 아이템 이름
+                    updates.push({ 
+                        id: agvId, 
+                        group: 'AGV_Active', 
+                        label: `${agvId}\n(운송중)\n${item}`
+                    });
                 } else {
-                    newGroup = originalGroup;
+                    // 대기 중 -> 회색
+                    updates.push({ 
+                        id: agvId, 
+                        group: 'AGV', 
+                        label: `${agvId}\n(대기)`
+                    });
                 }
+            }
+
+            // [구역 상태 반영]
+            ['Z_IN', 'Z_SORT', 'Z_OUT'].forEach(zid => {
+                let grp = 'Zone';
+                if(data.error_active && (zid === 'Z_IN' || zid === 'Z_SORT')) grp = 'Error';
+                else if(data.promo_active) grp = 'Promo';
                 
-                // 현재 하이라이트(검색) 상태가 아니면 색상 업데이트
-                if (node.group !== 'Highlight' && node.group !== newGroup) {
-                    updates.push({ id: node.id, group: newGroup });
+                // 검색 하이라이트 상태가 아닐 때만 업데이트
+                const currentNode = nodes.get(zid);
+                if(currentNode.group !== 'Highlight') {
+                    updates.push({ id: zid, group: grp });
                 }
             });
 
-            if(updates.length > 0) nodes.update(updates);
+            nodes.update(updates);
 
-        } catch(e) { console.error("Sync Error:", e); }
+        } catch(e) { console.error(e); }
     }
     setInterval(syncData, 2000);
 
-    /* === 5. 채팅 (LLM) === */
+    /* === 4. 채팅 === */
     async function sendChat() {
         const input = document.getElementById('chat-input');
         const text = input.value.trim();
         if(!text) return;
-
         addMsg(text, 'user');
         input.value = '';
-        const loadingId = addMsg('🔍 분석 중...', 'bot', true);
-
+        const ld = addMsg('...', 'bot');
+        
         try {
             const res = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ message: text })
+                method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text})
             });
-            const data = await res.json();
+            const d = await res.json();
+            document.getElementById(ld).innerHTML = d.reply;
             
-            removeMsg(loadingId);
-            addMsg(data.reply, 'bot');
-
-            // 6. LLM이 찾은 노드 하이라이트 (노란색 + 줌)
-            if(data.related_nodes && data.related_nodes.length > 0) {
-                const updates = data.related_nodes.map(id => ({ id: id, group: 'Highlight' }));
-                nodes.update(updates);
-                network.fit({ nodes: data.related_nodes, animation: true });
-
-                // 3초 뒤 원래 색상 복귀
+            if(d.related_nodes && d.related_nodes.length) {
+                const ups = d.related_nodes.map(id => ({id:id, group:'Highlight'}));
+                nodes.update(ups);
+                network.fit({nodes:d.related_nodes, animation:true});
                 setTimeout(() => {
-                    const resets = data.related_nodes.map(id => {
-                        const baseGroup = id.startsWith('Z') ? 'Zone' : (id.startsWith('A') ? 'AGV' : 'Center');
-                        return { id: id, group: baseGroup };
+                    const resets = d.related_nodes.map(id => {
+                        const base = id.startsWith('Z')?'Zone':(id.startsWith('A')?'AGV':'Center');
+                        return {id:id, group:base};
                     });
                     nodes.update(resets);
                 }, 3000);
             }
-
-        } catch(e) {
-            removeMsg(loadingId);
-            addMsg("⚠️ AI 연결이 불안정합니다. 잠시 후 다시 시도해주세요.", 'bot');
-        }
+        } catch(e) { document.getElementById(ld).innerHTML = "Error"; }
     }
-
-    function addMsg(text, type, isTemp=false) {
-        const div = document.createElement('div');
-        div.className = `msg ${type}`;
-        div.innerHTML = text;
-        if(isTemp) div.id = 'temp-msg';
-        const box = document.getElementById('chat-messages');
-        box.appendChild(div);
-        box.scrollTop = box.scrollHeight;
-        return div.id;
-    }
-    function removeMsg(id) {
-        const el = document.getElementById(id);
-        if(el) el.remove();
+    function addMsg(txt, type) {
+        const d = document.createElement('div');
+        d.className = `msg ${type}`;
+        d.innerHTML = txt;
+        d.id = 'msg-'+Date.now();
+        document.getElementById('chat-messages').appendChild(d);
+        return d.id;
     }
 </script>
 </body>
