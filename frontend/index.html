@@ -2,218 +2,398 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>Logistics Monitor</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Logistics Mobile</title>
     <script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
     <style>
-        :root { --primary: #2962FF; --bg: #F5F7FA; --error: #D50000; --promo: #AA00FF; }
-        body { margin: 0; font-family: 'Pretendard', sans-serif; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
-        
-        #main { flex: 3; position: relative; display: flex; flex-direction: column; }
-        #sidebar { flex: 1; background: white; border-left: 1px solid #ddd; display: flex; flex-direction: column; padding: 20px; box-shadow: -5px 0 15px rgba(0,0,0,0.05); z-index: 10; }
+        :root { 
+            --primary: #2962FF; --bg: #F5F7FA; --error: #D50000; --promo: #AA00FF; 
+            --nav-height: 60px; --panel-height: 40vh;
+        }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body { margin: 0; font-family: 'Pretendard', sans-serif; background: var(--bg); height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
 
-        /* 상태 카드 */
-        #cards { position: absolute; top: 20px; left: 20px; display: flex; gap: 15px; z-index: 5; }
-        .card { background: rgba(255,255,255,0.9); padding: 15px 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); border-left: 5px solid var(--primary); backdrop-filter: blur(5px); transition: 0.3s; }
-        .card:hover { transform: translateY(-3px); }
-        .card-label { font-size: 12px; color: #666; font-weight: bold; text-transform: uppercase; }
-        .card-val { font-size: 24px; font-weight: 800; color: #333; margin-top: 5px; }
-
+        /* === 1. 상단 맵 영역 (60%) === */
+        #map-container { flex: 1; position: relative; background: #fff; border-bottom: 1px solid #ddd; }
         #network { width: 100%; height: 100%; }
 
-        /* 채팅 & 로그 */
-        #logs { height: 30%; overflow-y: auto; margin-bottom: 20px; border-bottom: 1px solid #eee; }
-        .log-entry { font-size: 13px; padding: 8px; margin-bottom: 5px; border-radius: 4px; background: #eee; }
-        .log-entry.ERROR { background: #FFEBEE; color: #B71C1C; border-left: 3px solid var(--error); }
-        .log-entry.PROMO { background: #F3E5F5; color: #4A148C; border-left: 3px solid var(--promo); }
+        /* 상단 상태 카드 (가로 스크롤) */
+        #status-bar {
+            position: absolute; top: 15px; left: 0; right: 0; z-index: 10;
+            display: flex; gap: 10px; padding: 0 15px;
+            overflow-x: auto; scroll-behavior: smooth;
+            -ms-overflow-style: none; scrollbar-width: none; /* 스크롤바 숨김 */
+        }
+        #status-bar::-webkit-scrollbar { display: none; }
+        
+        .status-card {
+            flex: 0 0 auto; min-width: 100px;
+            background: rgba(255,255,255,0.95); backdrop-filter: blur(10px);
+            padding: 12px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            border: 1px solid rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+        }
+        .status-card:active { transform: scale(0.95); }
+        .st-label { font-size: 11px; color: #666; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 4px; }
+        .st-val { font-size: 20px; font-weight: 800; color: #333; }
+        .st-icon { width: 8px; height: 8px; border-radius: 50%; background: #ccc; }
+        .active .st-icon { background: var(--primary); box-shadow: 0 0 5px var(--primary); }
 
-        #chat-box { flex: 1; display: flex; flex-direction: column; }
-        #messages { flex: 1; overflow-y: auto; margin-bottom: 10px; display: flex; flex-direction: column; gap: 8px; }
-        .msg { padding: 10px; border-radius: 8px; font-size: 14px; max-width: 90%; }
-        .msg.bot { background: #E3F2FD; align-self: flex-start; }
-        .msg.user { background: var(--primary); color: white; align-self: flex-end; }
-        input { padding: 12px; border: 1px solid #ddd; border-radius: 20px; outline: none; }
+        /* === 2. 하단 패널 영역 (탭바 + 컨텐츠) === */
+        #bottom-panel { height: var(--panel-height); background: #fff; display: flex; flex-direction: column; box-shadow: 0 -5px 20px rgba(0,0,0,0.05); z-index: 20; }
+        
+        /* 탭 헤더 */
+        .tab-header { display: flex; border-bottom: 1px solid #eee; }
+        .tab-btn { 
+            flex: 1; padding: 15px; text-align: center; font-size: 14px; font-weight: 600; color: #888; 
+            cursor: pointer; transition: 0.3s; background: #fff; 
+        }
+        .tab-btn.active { color: var(--primary); border-bottom: 3px solid var(--primary); background: #F5F9FF; }
+        
+        /* 탭 컨텐츠 */
+        .tab-content { flex: 1; overflow-y: auto; padding: 15px; display: none; background: #fafafa; }
+        .tab-content.show { display: block; }
 
-        /* 모달 */
-        #modal { display: none; position: absolute; bottom: 30px; left: 30px; width: 250px; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 5px 20px rgba(0,0,0,0.2); z-index: 100; }
+        /* 로그 스타일 */
+        .log-item { 
+            padding: 12px; margin-bottom: 8px; border-radius: 8px; background: #fff; 
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); font-size: 13px; line-height: 1.4;
+            display: flex; gap: 10px; align-items: start;
+        }
+        .log-item.ERROR { border-left: 4px solid var(--error); background: #FFEBEE; }
+        .log-item.PROMO { border-left: 4px solid var(--promo); background: #F3E5F5; }
+        .log-icon { margin-top: 2px; }
+
+        /* 채팅 스타일 */
+        #chat-box { display: flex; flex-direction: column; height: 100%; }
+        #chat-msgs { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; padding-bottom: 10px; }
+        .msg { max-width: 80%; padding: 10px 14px; border-radius: 16px; font-size: 14px; line-height: 1.4; position: relative; }
+        .msg.bot { background: #fff; border: 1px solid #eee; align-self: flex-start; border-bottom-left-radius: 4px; color: #444; }
+        .msg.user { background: var(--primary); color: white; align-self: flex-end; border-bottom-right-radius: 4px; box-shadow: 0 2px 5px rgba(41, 98, 255, 0.3); }
+        
+        .chat-input-area { display: flex; gap: 8px; margin-top: 10px; }
+        #chat-in { 
+            flex: 1; padding: 12px 15px; border: 1px solid #ddd; border-radius: 25px; 
+            font-size: 14px; outline: none; background: #fff; 
+        }
+        #chat-in:focus { border-color: var(--primary); }
+        .send-btn { 
+            width: 45px; height: 45px; border-radius: 50%; background: var(--primary); border: none; 
+            color: white; display: flex; justify-content: center; align-items: center; box-shadow: 0 3px 10px rgba(41, 98, 255, 0.3); 
+        }
+        .send-btn:active { transform: scale(0.9); }
+
+        /* === 3. 바텀 시트 모달 (디테일 정보) === */
+        #bottom-sheet {
+            position: fixed; bottom: -100%; left: 0; right: 0;
+            background: white; z-index: 100;
+            border-top-left-radius: 20px; border-top-right-radius: 20px;
+            box-shadow: 0 -5px 30px rgba(0,0,0,0.2);
+            padding: 20px; transition: bottom 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            max-height: 50vh; display: flex; flex-direction: column;
+        }
+        #bottom-sheet.active { bottom: 0; }
+        .sheet-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .sheet-title { font-size: 18px; font-weight: bold; color: #333; }
+        .sheet-close { font-size: 20px; color: #999; padding: 5px; cursor: pointer; }
+        .sheet-body { overflow-y: auto; flex: 1; }
+        .detail-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+        .detail-empty { text-align: center; color: #aaa; padding: 20px; }
+        
+        /* 모달 뒷배경 흐림 */
+        #overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.3); z-index: 90;
+            display: none; backdrop-filter: blur(2px);
+        }
+        #overlay.active { display: block; }
+
+        /* PC 대응 (반응형) */
+        @media (min-width: 769px) {
+            body { flex-direction: row; }
+            #map-container { flex: 7; border-right: 1px solid #ddd; border-bottom: none; }
+            #bottom-panel { flex: 3; height: 100vh; border-left: 1px solid #ddd; }
+            #status-bar { justify-content: center; padding-top: 20px; }
+            .status-card { min-width: 140px; text-align: center; }
+            .st-label { justify-content: center; }
+        }
     </style>
 </head>
 <body>
 
-<div id="main">
-    <div id="cards">
-        <div class="card" onclick="focusNode('Z_IN')">
-            <div class="card-label">Inbound</div>
-            <div class="card-val" id="cnt-Z_IN">0</div>
+<div id="map-container">
+    <div id="status-bar">
+        <div class="status-card" id="card-Z_IN" onclick="focusNode('Z_IN')">
+            <div class="st-label"><div class="st-icon"></div> INBOUND</div>
+            <div class="st-val" id="val-Z_IN">0</div>
         </div>
-        <div class="card" onclick="focusNode('Z_SORT')">
-            <div class="card-label">Sorting</div>
-            <div class="card-val" id="cnt-Z_SORT">0</div>
+        <div class="status-card" id="card-Z_SORT" onclick="focusNode('Z_SORT')">
+            <div class="st-label"><div class="st-icon"></div> SORTING</div>
+            <div class="st-val" id="val-Z_SORT">0</div>
         </div>
-        <div class="card" onclick="focusNode('Z_OUT')">
-            <div class="card-label">Outbound</div>
-            <div class="card-val" id="cnt-Z_OUT">0</div>
+        <div class="status-card" id="card-Z_OUT" onclick="focusNode('Z_OUT')">
+            <div class="st-label"><div class="st-icon"></div> OUTBOUND</div>
+            <div class="st-val" id="val-Z_OUT">0</div>
         </div>
     </div>
     <div id="network"></div>
-    <div id="modal">
-        <h4 id="m-title" style="margin:0 0 10px 0;">Details</h4>
-        <div id="m-body" style="font-size:13px; color:#555;"></div>
-        <button onclick="document.getElementById('modal').style.display='none'" style="margin-top:10px; width:100%; padding:5px;">Close</button>
+</div>
+
+<div id="bottom-panel">
+    <div class="tab-header">
+        <div class="tab-btn active" onclick="switchTab('log')"><i class="fas fa-list-ul"></i> 로그 & 알림</div>
+        <div class="tab-btn" onclick="switchTab('chat')"><i class="fas fa-robot"></i> AI 관제사</div>
+    </div>
+
+    <div id="tab-log" class="tab-content show">
+        <div id="log-list">
+            <div style="text-align:center; padding:30px; color:#ccc;">
+                <i class="fas fa-check-circle" style="font-size:24px; margin-bottom:10px;"></i><br>
+                시스템 정상 가동 중
+            </div>
+        </div>
+    </div>
+
+    <div id="tab-chat" class="tab-content">
+        <div id="chat-box">
+            <div id="chat-msgs">
+                <div class="msg bot">👋 안녕하세요!<br>물류 현황이나 장애 원인을 물어보세요.</div>
+            </div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-in" placeholder="메시지 입력..." onkeypress="if(event.key==='Enter') sendChat()">
+                <button class="send-btn" onclick="sendChat()"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
     </div>
 </div>
 
-<div id="sidebar">
-    <div id="logs"><div style="color:#999; text-align:center; padding:10px;">System Ready</div></div>
-    <div id="chat-box">
-        <div id="messages">
-            <div class="msg bot">AI 물류 관제 시스템입니다.</div>
-        </div>
-        <input type="text" id="chat-in" placeholder="명령어 입력..." onkeypress="if(event.key==='Enter') send()">
+<div id="overlay" onclick="closeSheet()"></div>
+<div id="bottom-sheet">
+    <div class="sheet-header">
+        <div class="sheet-title" id="sheet-title">정보</div>
+        <div class="sheet-close" onclick="closeSheet()"><i class="fas fa-times"></i></div>
+    </div>
+    <div class="sheet-body" id="sheet-content">
+        로딩 중...
     </div>
 </div>
 
 <script>
-    // 1. 토폴로지 정의 (트럭 추가)
+    // === 1. 화면 설정 (Vis.js) ===
     const nodes = new vis.DataSet([
-        { id: 'Z_IN', label: '입고존\n(Inbound)', group: 'Zone', x: -300, y: 0 },
-        { id: 'Z_SORT', label: '분류존\n(Sorting)', group: 'Zone', x: 0, y: 0 },
-        { id: 'Z_OUT', label: '출고존\n(Outbound)', group: 'Zone', x: 300, y: 0 },
-        { id: 'TRUCK', label: '물류 트럭\n(Shipping)', group: 'Truck', x: 450, y: 0 }, // 트럭 노드
-        { id: 'AGV_01', label: 'AGV-01', group: 'AGV', x: -150, y: 100 },
-        { id: 'AGV_02', label: 'AGV-02', group: 'AGV', x: 150, y: 100 }
+        { id: 'Z_IN', label: '입고\n(In)', group: 'Zone', x: -250, y: 0 },
+        { id: 'Z_SORT', label: '분류\n(Sort)', group: 'Zone', x: 0, y: 0 },
+        { id: 'Z_OUT', label: '출고\n(Out)', group: 'Zone', x: 250, y: 0 },
+        { id: 'TRUCK', label: '트럭', group: 'Truck', x: 380, y: 0 },
+        { id: 'AGV_01', label: 'AGV-01', group: 'AGV', x: -120, y: 100 },
+        { id: 'AGV_02', label: 'AGV-02', group: 'AGV', x: 120, y: 100 }
     ]);
 
     const edges = new vis.DataSet([
-        { from: 'Z_IN', to: 'Z_SORT', arrows: 'to', dashes: true, width: 2, label: 'Flow' },
-        { from: 'Z_SORT', to: 'Z_OUT', arrows: 'to', dashes: true, width: 2, label: 'Flow' },
-        { from: 'Z_OUT', to: 'TRUCK', arrows: 'to', width: 3, color: {color:'#555'} },
-        { from: 'AGV_01', to: 'Z_IN', dashes: true, color: '#ccc' },
-        { from: 'AGV_02', to: 'Z_SORT', dashes: true, color: '#ccc' }
+        { from: 'Z_IN', to: 'Z_SORT', arrows: 'to', dashes:true, color: '#e0e0e0' },
+        { from: 'Z_SORT', to: 'Z_OUT', arrows: 'to', dashes:true, color: '#e0e0e0' },
+        { from: 'Z_OUT', to: 'TRUCK', arrows: 'to', color: '#555' },
+        { from: 'AGV_01', to: 'Z_IN', dashes: true, color: '#ddd' },
+        { from: 'AGV_02', to: 'Z_SORT', dashes: true, color: '#ddd' }
     ]);
 
     const container = document.getElementById('network');
     const network = new vis.Network(container, { nodes, edges }, {
-        nodes: { shape: 'box', margin: 10, font: { color: 'white' }, shadow: true },
+        nodes: { 
+            shape: 'box', margin: 10, font: { color: 'white', size: 14, face:'Pretendard' }, 
+            borderWidth: 0, shadow: true 
+        },
         groups: {
-            Zone: { color: '#2962FF' },
-            AGV: { color: '#78909C', shape: 'ellipse' },
-            AGV_Busy: { color: '#00C853', shape: 'ellipse' }, // 운반 중 녹색
-            Truck: { color: '#37474F', shape: 'box', font: {size: 16} },
+            Zone: { color: { background: '#2962FF', border: '#2962FF' }, shape: 'box', heightConstraint: 40 },
+            AGV: { color: '#90A4AE', shape: 'ellipse', widthConstraint: 40 },
+            AGV_Busy: { color: '#00C853', shape: 'ellipse' },
+            Truck: { color: '#37474F', shape: 'box' },
             Error: { color: '#D50000' },
             Promo: { color: '#AA00FF' },
             Highlight: { color: '#FFD600', font:{color:'black'} }
         },
-        physics: false,
-        interaction: { hover: true }
+        physics: false, // 모바일 성능 위해 물리엔진 OFF
+        interaction: { hover: true, zoomView: true, dragView: true }
     });
-    network.fit();
+    
+    // 모바일에서 초기 화면 핏 맞추기
+    network.once("afterDrawing", () => network.fit({animation: false}));
 
-    // 2. 데이터 동기화 루프
-    async function sync() {
+    // === 2. 인터랙션 (터치/클릭) ===
+    network.on("click", function (params) {
+        if (params.nodes.length > 0) {
+            openSheet(params.nodes[0]);
+        }
+    });
+
+    function focusNode(id) {
+        network.focus(id, { scale: 1.2, animation: true });
+        openSheet(id);
+    }
+
+    // 바텀 시트 열기
+    async function openSheet(id) {
+        const sheet = document.getElementById('bottom-sheet');
+        const overlay = document.getElementById('overlay');
+        const content = document.getElementById('sheet-content');
+        const title = document.getElementById('sheet-title');
+        
+        title.innerText = `${id} 상세 정보`;
+        content.innerHTML = '<div style="text-align:center; padding:20px;"><i class="fas fa-spinner fa-spin"></i> 조회 중...</div>';
+        
+        sheet.classList.add('active');
+        overlay.classList.add('active');
+
+        try {
+            const res = await fetch(`/api/node-details/${id}`);
+            const data = await res.json();
+            
+            if(!data.items || data.items.length === 0) {
+                content.innerHTML = '<div class="detail-empty">📦 보관 중인 물품이 없습니다.</div>';
+            } else {
+                content.innerHTML = data.items.map(item => `
+                    <div class="detail-row">
+                        <span><i class="fas fa-box"></i> ${item.id}</span>
+                        <span style="color:#888; font-size:12px;">${item.time}</span>
+                    </div>
+                `).join('');
+            }
+        } catch(e) {
+            content.innerHTML = '<div class="detail-empty">정보를 불러올 수 없습니다.</div>';
+        }
+    }
+
+    function closeSheet() {
+        document.getElementById('bottom-sheet').classList.remove('active');
+        document.getElementById('overlay').classList.remove('active');
+    }
+
+    // === 3. 탭 전환 ===
+    window.switchTab = function(tabName) {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('show'));
+        
+        const btnIdx = tabName === 'log' ? 0 : 1;
+        document.querySelectorAll('.tab-btn')[btnIdx].classList.add('active');
+        document.getElementById(`tab-${tabName}`).classList.add('show');
+    }
+
+    // === 4. 데이터 동기화 ===
+    async function syncData() {
         try {
             const res = await fetch('/api/system-status');
             const data = await res.json();
 
-            // 카운트 업데이트
+            // 상단 카드 업데이트
             for(const [k, v] of Object.entries(data.counts)) {
-                const el = document.getElementById(`cnt-${k}`);
+                const el = document.getElementById(`val-${k}`);
                 if(el) el.innerText = v;
+                
+                // 값이 바뀌면 살짝 강조 (애니메이션)
+                const card = document.getElementById(`card-${k}`);
+                if(data.error_active && ['Z_IN','Z_SORT'].includes(k)) {
+                    card.style.border = '2px solid var(--error)';
+                } else {
+                    card.style.border = '1px solid rgba(0,0,0,0.05)';
+                }
             }
 
-            // 로그창
-            const logDiv = document.getElementById('logs');
-            if(data.events.length) {
-                logDiv.innerHTML = data.events.map(e => 
-                    `<div class="log-entry ${e.type}"><b>${e.type}</b>: ${e.desc}</div>`
-                ).join('');
+            // 로그 탭 업데이트
+            const logList = document.getElementById('log-list');
+            if(data.events.length > 0) {
+                logList.innerHTML = data.events.map(e => `
+                    <div class="log-item ${e.type}">
+                        <div class="log-icon"><i class="fas ${e.type === 'ERROR' ? 'fa-exclamation-triangle' : 'fa-gift'}"></i></div>
+                        <div>
+                            <div style="font-weight:bold; margin-bottom:2px;">${e.type}</div>
+                            <div style="color:#555;">${e.desc}</div>
+                        </div>
+                    </div>
+                `).join('');
             }
 
-            // 노드 상태 업데이트
+            // 노드 업데이트 (AGV 움직임 등)
             const updates = [];
             
-            // AGV 상태 (Busy/Idle)
-            for(const [id, item] of Object.entries(data.agv)) {
+            // AGV
+            for(const [id, item] of Object.entries(data.agv || {})) {
                 if(item) {
-                    updates.push({ id: id, group: 'AGV_Busy', label: `${id}\n📦 ${item}` });
+                    updates.push({ id: id, group: 'AGV_Busy', label: `${id}\n📦` });
                 } else {
                     updates.push({ id: id, group: 'AGV', label: id });
                 }
             }
 
-            // Zone 상태 (Event)
+            // Zone Events
             ['Z_IN', 'Z_SORT', 'Z_OUT'].forEach(zid => {
                 let grp = 'Zone';
                 if(data.error_active) grp = 'Error';
                 else if(data.promo_active) grp = 'Promo';
                 
-                // 하이라이트 중이면 건너뜀
-                if(nodes.get(zid).group !== 'Highlight') {
+                const curr = nodes.get(zid);
+                if(curr.group !== 'Highlight') {
                     updates.push({ id: zid, group: grp });
                 }
             });
+            nodes.update(updates);
 
-            if(updates.length) nodes.update(updates);
-
-        } catch(e) { console.error(e); }
+        } catch(e) { console.error("Sync Error", e); }
     }
-    setInterval(sync, 1500); // 1.5초마다 갱신
+    setInterval(syncData, 1500);
 
-    // 3. UI 기능
-    network.on('click', p => {
-        if(p.nodes.length) showDetail(p.nodes[0]);
-    });
+    // === 5. 채팅 기능 ===
+    async function sendChat() {
+        const input = document.getElementById('chat-in');
+        const text = input.value.trim();
+        if(!text) return;
 
-    async function showDetail(id) {
-        const modal = document.getElementById('modal');
-        const body = document.getElementById('m-body');
-        modal.style.display = 'block';
-        document.getElementById('m-title').innerText = id;
-        body.innerHTML = 'Loading...';
+        addMsg(text, 'user');
+        input.value = '';
+        
+        // 로딩 표시
+        const loadId = addMsg('...', 'bot');
         
         try {
-            const res = await fetch(`/api/node-details/${id}`);
+            const res = await fetch('/api/chat', {
+                method: 'POST', headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ message: text })
+            });
             const d = await res.json();
-            if(!d.items.length) body.innerHTML = '비어 있음';
-            else body.innerHTML = d.items.map(i => `<div>📦 ${i.id}</div>`).join('');
-        } catch(e) { body.innerText = 'Error'; }
-    }
-
-    async function send() {
-        const inp = document.getElementById('chat-in');
-        const txt = inp.value.trim();
-        if(!txt) return;
-        
-        addMsg(txt, 'user');
-        inp.value = '';
-        
-        try {
-            const res = await fetch('/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:txt})});
-            const d = await res.json();
-            addMsg(d.reply, 'bot');
             
-            if(d.related_nodes.length) {
-                const ups = d.related_nodes.map(id => ({id, group:'Highlight'}));
+            // 답변 교체
+            document.getElementById(loadId).innerHTML = d.reply;
+            
+            // 관련 노드 하이라이트
+            if(d.related_nodes && d.related_nodes.length > 0) {
+                const ups = d.related_nodes.map(id => ({ id: id, group: 'Highlight' }));
                 nodes.update(ups);
+                network.fit({ nodes: d.related_nodes, animation: true });
+                
                 setTimeout(() => {
-                    const resets = d.related_nodes.map(id => ({id, group:id.startsWith('A')?'AGV':'Zone'}));
+                    const resets = d.related_nodes.map(id => {
+                        const base = id.startsWith('A') ? 'AGV' : (id === 'TRUCK' ? 'Truck' : 'Zone');
+                        return { id: id, group: base };
+                    });
                     nodes.update(resets);
                 }, 3000);
             }
-        } catch(e) { addMsg("오류 발생", 'bot'); }
+        } catch(e) {
+            document.getElementById(loadId).innerHTML = "⚠️ 연결 오류 발생";
+        }
     }
-    
-    function addMsg(t, type) {
-        const d = document.createElement('div');
-        d.className = `msg ${type}`;
-        d.innerText = t;
-        document.getElementById('messages').appendChild(d);
-    }
-    
-    function focusNode(id) {
-        network.focus(id, {animation:true, scale:1.2});
-        showDetail(id);
+
+    function addMsg(text, type) {
+        const div = document.createElement('div');
+        div.className = `msg ${type}`;
+        div.innerHTML = text;
+        div.id = 'msg-' + Date.now();
+        const box = document.getElementById('chat-msgs');
+        box.appendChild(div);
+        box.scrollTop = box.scrollHeight;
+        return div.id;
     }
 </script>
 </body>
