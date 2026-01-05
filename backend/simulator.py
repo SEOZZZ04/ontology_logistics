@@ -15,23 +15,24 @@ except:
 class LogisticsSimulator:
     def __init__(self):
         self.is_running = False
-        
-        # 이벤트 제어 변수
-        self.event_active = False      # 현재 이벤트 진행 여부
-        self.current_event_type = None # PROMO or ERROR
+        self.event_active = False
+        self.current_event_type = None
         self.event_start_time = 0
-        self.last_event_end_time = 0   # 마지막 이벤트가 끝난 시간 (쿨다운용)
+        self.last_event_end_time = 0
         
         # 설정값
-        self.MIN_EVENT_DURATION = 20.0 # 이벤트 최소 지속 시간 (초)
-        self.EVENT_COOLDOWN = 15.0     # 이벤트 종료 후 다음 이벤트까지 대기 시간 (초)
+        self.MIN_EVENT_DURATION = 20.0 
+        self.EVENT_COOLDOWN = 15.0
+        
+        # AGV 이동 소요 시간 (초) - 애니메이션 속도 결정
+        self.AGV_TRAVEL_TIME = 3.0 
 
     async def start(self):
         self.is_running = True
-        print("🚀 [Sim] 풀 사이클 물류 시뮬레이터 가동 (In -> Sort -> Out -> Truck)")
+        print("🚀 [Sim] 디지털 트윈 시뮬레이터 가동")
         while self.is_running:
             await self.tick()
-            await asyncio.sleep(1.5) # 1.5초 틱 (너무 빠르지 않게)
+            await asyncio.sleep(1.0) # 1초 단위 틱
 
     def stop(self):
         self.is_running = False
@@ -39,54 +40,37 @@ class LogisticsSimulator:
     async def tick(self):
         curr_time = time.time()
         
-        # ==========================================
-        # 1. 이벤트 라이프사이클 관리 (20초 유지 & 쿨다운)
-        # ==========================================
+        # 1. 이벤트/장애물 관리 (기존 로직 유지)
         if self.event_active:
-            # 이벤트 진행 중: 20초 지났는지 확인
-            duration = curr_time - self.event_start_time
-            if duration > self.MIN_EVENT_DURATION:
-                # 20초 지남 -> 20% 확률로 종료 (자연스러운 종료 유도)
-                if random.random() < 0.2:
-                    self.end_event()
+            if curr_time - self.event_start_time > self.MIN_EVENT_DURATION:
+                if random.random() < 0.2: self.end_event()
         else:
-            # 이벤트 없음: 쿨다운 체크
-            time_since_last = curr_time - self.last_event_end_time
-            if time_since_last > self.EVENT_COOLDOWN:
-                # 쿨다운 지남 -> 10% 확률로 새 이벤트 발생
-                if random.random() < 0.1:
-                    await self.trigger_random_event()
+            if curr_time - self.last_event_end_time > self.EVENT_COOLDOWN:
+                if random.random() < 0.1: await self.trigger_random_event()
 
-        # ==========================================
-        # 2. 물류 흐름 (장애 발생 시 AGV 멈춤)
-        # ==========================================
         is_error = (self.event_active and self.current_event_type == 'ERROR')
         
-        # [Step 1] 입고 (Inbound) 생성
-        # 프로모션이면 많이, 평시면 적당히, 장애면 중단
-        spawn_rate = 0
-        if self.event_active and self.current_event_type == 'PROMO':
-            spawn_rate = 0.8 # 80% 확률로 생성
-        elif not is_error:
-            spawn_rate = 0.4 # 40% 확률
-        
-        if random.random() < spawn_rate:
+        # 2. 아이템 생성 (Inbound)
+        spawn_rate = 0.8 if (self.event_active and self.current_event_type == 'PROMO') else 0.4
+        if not is_error and random.random() < spawn_rate:
             await self.spawn_item()
 
-        # [Step 2 & 3] AGV 이동 (Pick & Place)
+        # 3. AGV 로직 (상태 기반 이동)
         if not is_error:
-            # AGV_01: In -> Sort
-            await self.process_agv('AGV_01', 'Z_IN', 'Z_SORT')
-            # AGV_02: Sort -> Out
-            await self.process_agv('AGV_02', 'Z_SORT', 'Z_OUT')
+            # 이동 완료 체크 및 상태 업데이트
+            await self.check_agv_movements(curr_time)
+            
+            # 새로운 작업 할당
+            await self.assign_task('AGV_01', 'Z_IN', 'Z_SORT', curr_time)
+            await self.assign_task('AGV_02', 'Z_SORT', 'Z_OUT', curr_time)
 
-        # [Step 4] 트럭 상차 (Truck Loading)
-        # 트럭은 주기적으로 와서 Z_OUT에 있는걸 다 가져감
-        if random.random() < 0.3: # 30% 확률로 트럭 도착
+        # 4. 트럭 상차
+        if random.random() < 0.2:
             await self.process_truck()
 
     async def spawn_item(self):
         item_id = f"BOX_{str(uuid.uuid4())[:4].upper()}"
+        # 아이템 생성 시 시각적 효과를 위해 'CREATED' 상태 부여
         q = """
         MATCH (z:Zone {id: 'Z_IN'})
         CREATE (i:Item {id: $id, status: 'WAITING', timestamp: datetime()})
@@ -94,42 +78,51 @@ class LogisticsSimulator:
         """
         db.run_query(q, {"id": item_id})
 
-    async def process_agv(self, agv_id, src_zone, dst_zone):
-        # 1. AGV가 물건을 들고 있는지 확인
+    async def assign_task(self, agv_id, src_id, dst_id, curr_time):
+        # AGV가 IDLE 상태이고, 출발지에 물건이 있을 때만 이동 시작
         q_check = """
         MATCH (a:AGV {id: $agv_id})
-        OPTIONAL MATCH (i:Item)-[:LOADED_ON]->(a)
-        RETURN i.id as item_id
+        WHERE NOT (a)-[:MOVING_TO]->() -- 이동 중이 아닐 때
+        MATCH (src:Zone {id: $src})
+        MATCH (i:Item)-[:STORED_IN]->(src)
+        WITH a, i, src LIMIT 1
+        RETURN a.id, i.id as item_id
         """
-        res = db.run_query(q_check, {"agv_id": agv_id})
-        carrying_item = res[0]['item_id'] if res else None
-
-        if carrying_item:
-            # [Place] 목적지에 내려놓기
-            q_drop = """
-            MATCH (a:AGV {id: $agv_id})
-            MATCH (i:Item)-[r:LOADED_ON]->(a)
-            MATCH (z:Zone {id: $dst})
-            DELETE r
-            CREATE (i)-[:STORED_IN]->(z)
-            SET i.status = 'ARRIVED'
-            """
-            db.run_query(q_drop, {"agv_id": agv_id, "dst": dst_zone})
-        else:
-            # [Pick] 출발지에서 하나 집기 (FIFO)
-            q_pick = """
-            MATCH (z:Zone {id: $src})
-            MATCH (i:Item)-[r:STORED_IN]->(z)
-            WITH i, r, z ORDER BY i.timestamp ASC LIMIT 1
-            MATCH (a:AGV {id: $agv_id})
-            DELETE r
+        res = db.run_query(q_check, {"agv_id": agv_id, "src": src_id})
+        
+        if res:
+            item_id = res[0]['item_id']
+            # 이동 시작 (상태 변경: LOCATED_AT 삭제 -> MOVING_TO 관계 생성)
+            # start_time을 기록하여 프론트엔드가 위치를 보간(Interpolation)하게 함
+            q_move = """
+            MATCH (a:AGV {id: $agv_id})-[l:LOCATED_AT]->(src:Zone {id: $src})
+            MATCH (i:Item {id: $item_id})-[s:STORED_IN]->(src)
+            MATCH (dst:Zone {id: $dst})
+            DELETE l, s
+            CREATE (a)-[:MOVING_TO {start_time: $now, duration: $dur}]->(dst)
             CREATE (i)-[:LOADED_ON]->(a)
-            SET i.status = 'MOVING'
+            SET a.status = 'MOVING', i.status = 'TRANSIT'
             """
-            db.run_query(q_pick, {"agv_id": agv_id, "src": src_zone})
+            db.run_query(q_move, {
+                "agv_id": agv_id, "src": src_id, "dst": dst_id, "item_id": item_id,
+                "now": curr_time, "dur": self.AGV_TRAVEL_TIME
+            })
+
+    async def check_agv_movements(self, curr_time):
+        # 이동 중인 AGV 중 시간이 다 된 것들을 목적지에 도착 처리
+        q_arrived = """
+        MATCH (a:AGV)-[m:MOVING_TO]->(dst:Zone)
+        WHERE $now >= m.start_time + m.duration
+        MATCH (i:Item)-[l:LOADED_ON]->(a)
+        DELETE m, l
+        CREATE (a)-[:LOCATED_AT]->(dst)
+        CREATE (i)-[:STORED_IN]->(dst)
+        SET a.status = 'IDLE', i.status = 'ARRIVED'
+        RETURN a.id
+        """
+        db.run_query(q_arrived, {"now": curr_time})
 
     async def process_truck(self):
-        # Z_OUT에 있는 아이템들을 삭제 (트럭 출발)
         q_truck = """
         MATCH (z:Zone {id: 'Z_OUT'})
         MATCH (i:Item)-[r:STORED_IN]->(z)
@@ -139,16 +132,13 @@ class LogisticsSimulator:
         db.run_query(q_truck)
 
     async def trigger_random_event(self):
-        # 프로모션 vs 장애 반반
         evt_type = "PROMO" if random.random() < 0.5 else "ERROR"
-        desc = "✨ 주문 폭주! 물량 급증!" if evt_type == "PROMO" else "⚠️ 컨베이어 벨트 고장! 작업 중단!"
+        desc = "🚀 [주문 폭주] 처리량 급증!" if evt_type == "PROMO" else "🚨 [설비 고장] 컨베이어 정지!"
         
         self.event_active = True
         self.current_event_type = evt_type
         self.event_start_time = time.time()
         
-        # DB에 이벤트 노드 생성
-        vec = [0.0] * 768 # 임베딩은 생략하거나 더미값
         evt_id = f"EVT_{str(uuid.uuid4())[:4]}"
         q = """
         MATCH (c:Center)
@@ -156,14 +146,10 @@ class LogisticsSimulator:
         MERGE (c)-[:HAS_EVENT]->(e)
         """
         db.run_query(q, {"id": evt_id, "desc": desc, "type": evt_type})
-        print(f"🔥 이벤트 발생: {evt_type}")
 
     def end_event(self):
-        print(f"🏁 이벤트 종료: {self.current_event_type}")
-        # DB에서 이벤트 삭제
         if self.current_event_type:
             db.run_query(f"MATCH (e:Event {{type: '{self.current_event_type}'}}) DETACH DELETE e")
-        
         self.event_active = False
         self.current_event_type = None
         self.last_event_end_time = time.time()
