@@ -20,11 +20,10 @@ class Neo4jHandler:
             return [record.data() for record in result]
 
     def clean_database(self):
-        print("🧹 [DB] 초기화 중...")
         self.run_query("MATCH (n) DETACH DELETE n")
 
     def init_schema(self):
-        print("⚙️ [DB] 스키마 및 인덱스 설정 중...")
+        print("⚙️ [DB] 스키마 설정 중...")
         queries = [
             "CREATE CONSTRAINT IF NOT EXISTS FOR (c:Center) REQUIRE c.id IS UNIQUE",
             "CREATE CONSTRAINT IF NOT EXISTS FOR (z:Zone) REQUIRE z.id IS UNIQUE",
@@ -42,38 +41,38 @@ class Neo4jHandler:
                 session.run(q)
 
     def seed_data(self):
-        print("🏗️ [DB] 고도화된 온톨로지 생성 중...")
+        print("🏗️ [DB] 한국형 물류 센터 온톨로지 생성...")
         query = """
         // 1. 센터 정의
-        MERGE (c:Center {id: 'DT_HUB', name: 'Smart Digital Twin Center'})
+        MERGE (c:Center {id: 'DT_HUB', name: '스마트 물류 센터'})
         
-        // 2. 주요 구역 (Zone) 정의 - 좌표 메타데이터 포함 (시각화용)
-        MERGE (z1:Zone {id: 'Z_IN', name: 'Inbound Dock', type: 'DOCK', x: -300, y: 0})
-        MERGE (z2:Zone {id: 'Z_SORT', name: 'Auto Sorter', type: 'PROCESS', x: 0, y: 0})
-        MERGE (z3:Zone {id: 'Z_OUT', name: 'Outbound Bay', type: 'DOCK', x: 300, y: 0})
+        // 2. 구역 (Zone) - 한글 라벨
+        MERGE (z1:Zone {id: 'Z_IN', name: '입고존', type: 'DOCK', x: -300, y: 0})
+        MERGE (z2:Zone {id: 'Z_SORT', name: '분류존', type: 'PROCESS', x: 0, y: 0})
+        MERGE (z3:Zone {id: 'Z_OUT', name: '출고존', type: 'DOCK', x: 300, y: 0})
         
         // 3. AGV 정의
-        MERGE (a1:AGV {id: 'AGV_01', name: 'Fast-Bot Alpha', status: 'IDLE'})
-        MERGE (a2:AGV {id: 'AGV_02', name: 'Heavy-Bot Beta', status: 'IDLE'})
+        MERGE (a1:AGV {id: 'AGV_01', name: '1호기', status: 'IDLE'})
+        MERGE (a2:AGV {id: 'AGV_02', name: '2호기', status: 'IDLE'})
 
-        // 4. 트럭 정의
-        MERGE (t:Truck {id: 'TRUCK', name: 'Logistics Truck', status: 'WAITING'})
+        // 4. 트럭 정의 (초기 위치는 화면 밖)
+        MERGE (t:Truck {id: 'TRUCK', name: '배송 트럭', status: 'WAITING', x: 500, y: 0})
 
-        // 5. 관계 정의 (구조적 연결)
+        // 5. 연결 관계
         MERGE (c)-[:HAS_ZONE]->(z1)
         MERGE (c)-[:HAS_ZONE]->(z2)
         MERGE (c)-[:HAS_ZONE]->(z3)
         MERGE (z3)-[:LOADING_AREA]->(t)
 
-        // 6. 경로(Path) 정의 (물리적 이동 가능 경로)
-        MERGE (z1)-[:CONNECTED_TO {distance: 10, type: 'CONVEYOR'}]->(z2)
-        MERGE (z2)-[:CONNECTED_TO {distance: 10, type: 'AGV_PATH'}]->(z3)
+        // 6. 이동 경로 정의
+        MERGE (z1)-[:CONNECTED_TO {distance: 10}]->(z2)
+        MERGE (z2)-[:CONNECTED_TO {distance: 10}]->(z3)
 
-        // 7. 초기 위치 설정
+        // 7. 초기 배치
         MERGE (a1)-[:LOCATED_AT]->(z1)
         MERGE (a2)-[:LOCATED_AT]->(z2)
         """
         self.run_query(query)
-        print("✅ [DB] 온톨로지 구축 완료.")
+        print("✅ [DB] 데이터 구축 완료.")
 
 db = Neo4jHandler()
