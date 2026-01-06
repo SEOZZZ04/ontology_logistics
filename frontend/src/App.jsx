@@ -6,57 +6,65 @@ import EventLog from './components/EventLog';
 import ChatBot from './components/ChatBot';
 
 function App() {
-  const [data, setData] = useState({ graph: { nodes: [], links: [] }, events: [], traffic: 1.0 });
+  // 전체 데이터 상태
+  const [data, setData] = useState({ 
+    graph: { nodes: [], links: [] }, 
+    events: [], 
+    traffic_level: 1.0 
+  });
+  
+  // 검색/대화로 인한 하이라이트 상태
   const [highlightNodes, setHighlightNodes] = useState(new Set());
 
-  // 데이터 폴링 (1초 주기)
+  // 1초마다 백엔드에서 데이터 폴링
   useEffect(() => {
+    // 배포 환경과 로컬 환경 자동 구분
     const apiBase = import.meta.env.PROD ? '' : 'http://localhost:8000';
-    const interval = setInterval(async () => {
+    
+    const fetchData = async () => {
       try {
         const res = await axios.get(`${apiBase}/api/dashboard`);
-        setData({
-          graph: res.data.graph,
-          events: res.data.events,
-          traffic: res.data.traffic_level
-        });
+        setData(res.data);
       } catch (e) {
-        console.error("Connection Error", e);
+        console.error("Dashboard connection failed", e);
       }
-    }, 1000);
+    };
+
+    fetchData(); // 즉시 실행
+    const interval = setInterval(fetchData, 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // 챗봇에서 노드 하이라이트 요청 시 처리
+  // 챗봇이 특정 노드를 언급했을 때 호출
   const handleHighlight = (nodeIds) => {
     setHighlightNodes(new Set(nodeIds));
-    // 3초 후 하이라이트 해제 (선택사항)
+    // 5초 후 하이라이트 자동 해제
     setTimeout(() => setHighlightNodes(new Set()), 5000);
   };
 
   return (
-    <div className="w-full h-screen bg-[#F2F4F6] p-4 box-border font-sans">
-      <div className="grid grid-cols-2 grid-rows-2 gap-4 h-full">
-        {/* 1. 물류 흐름 (좌상) */}
-        <div className="overflow-hidden">
-          <SimulationView nodes={data.graph.nodes} />
-        </div>
-        
-        {/* 2. 이벤트 로그 (우상) */}
-        <div className="overflow-hidden">
-          <EventLog events={data.events} />
-        </div>
-
-        {/* 3. 온톨로지 뷰 (좌하) */}
-        <div className="overflow-hidden">
-          <OntologyView data={data.graph} highlightNodes={highlightNodes} />
-        </div>
-
-        {/* 4. 챗봇 (우하) */}
-        <div className="overflow-hidden">
-          <ChatBot onHighlightNodes={handleHighlight} />
-        </div>
+    <div className="w-full h-screen p-4 grid grid-cols-2 grid-rows-2 gap-4 box-border">
+      
+      {/* 1. 좌상: 물류 흐름 (Simulation) */}
+      <div className="rounded-3xl overflow-hidden shadow-sm bg-white">
+        <SimulationView nodes={data.graph.nodes} />
       </div>
+      
+      {/* 2. 우상: 이벤트 로그 (Notifications) */}
+      <div className="rounded-3xl overflow-hidden shadow-sm bg-white">
+        <EventLog events={data.events} traffic={data.traffic_level} />
+      </div>
+
+      {/* 3. 좌하: 온톨로지 뷰 (Graph) */}
+      <div className="rounded-3xl overflow-hidden shadow-sm bg-white border border-gray-100">
+        <OntologyView data={data.graph} highlightNodes={highlightNodes} />
+      </div>
+
+      {/* 4. 우하: AI 에이전트 (Chat) */}
+      <div className="rounded-3xl overflow-hidden shadow-sm bg-white">
+        <ChatBot onHighlightNodes={handleHighlight} />
+      </div>
+
     </div>
   );
 }
